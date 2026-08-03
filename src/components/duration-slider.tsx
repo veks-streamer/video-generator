@@ -7,6 +7,7 @@ interface Props {
   onChange: (v: number) => void;
   min?: number;
   max?: number;
+  step?: number;
 }
 
 function fmt(s: number): string {
@@ -16,7 +17,7 @@ function fmt(s: number): string {
   return sec === 0 ? `${m}m` : `${m}m ${sec}s`;
 }
 
-export function DurationSlider({ value, onChange, min = 10, max = 120 }: Props) {
+export function DurationSlider({ value, onChange, min = 10, max = 600, step = 5 }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -30,7 +31,7 @@ export function DurationSlider({ value, onChange, min = 10, max = 120 }: Props) 
         onValueChange={([v]) => onChange(v)}
         min={min}
         max={max}
-        step={5}
+        step={step}
       />
       <div className="flex justify-between text-sm text-muted-foreground">
         <span>{fmt(min)}</span>

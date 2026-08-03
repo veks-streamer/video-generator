@@ -54,6 +54,7 @@ export interface Quality {
 export const qualities: Quality[] = [
   { id: "fast", label: "Fast (480p)", scale: 2 / 3, crf: 28 },
   { id: "balanced", label: "Balanced (720p)", scale: 1, crf: 25 },
+  { id: "hd", label: "Full HD (1080p)", scale: 1.5, crf: 23 },
 ];
 
 export type ProgressStage =

@@ -1,15 +1,18 @@
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, CheckCircle, AlertCircle, X } from "lucide-react";
 import type { ProgressUpdate } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 interface Props {
   progress: ProgressUpdate;
   visible: boolean;
+  details?: string;
+  onClose?: () => void;
 }
 
-export function ProgressPanel({ progress, visible }: Props) {
+export function ProgressPanel({ progress, visible, details, onClose }: Props) {
   if (!visible) return null;
   const isError = progress.stage === "error";
   const isDone = progress.stage === "complete";
@@ -32,9 +35,15 @@ export function ProgressPanel({ progress, visible }: Props) {
               <h3 className="text-lg font-semibold">
                 {isError ? "Something went wrong" : isDone ? "Done!" : "Building your video…"}
               </h3>
-              <p className="text-sm text-muted-foreground">{progress.message}</p>
+              <p className="text-sm text-muted-foreground break-words">{progress.message}</p>
             </div>
           </div>
+
+          {isError && details && (
+            <pre className="text-[11px] leading-snug bg-muted/60 rounded-md p-3 max-h-40 overflow-auto whitespace-pre-wrap text-muted-foreground">
+              {details}
+            </pre>
+          )}
 
           {!isError && (
             <div className="space-y-2">
@@ -49,6 +58,12 @@ export function ProgressPanel({ progress, visible }: Props) {
                 </p>
               )}
             </div>
+          )}
+
+          {isError && onClose && (
+            <Button variant="outline" className="w-full" onClick={onClose}>
+              <X className="h-4 w-4 mr-2" /> Close
+            </Button>
           )}
         </CardContent>
       </Card>

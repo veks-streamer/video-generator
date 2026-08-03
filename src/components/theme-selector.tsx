@@ -47,6 +47,10 @@ export function ThemeSelector({ themeId, customQuery, onSelectTheme, onCustomQue
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
+          id="theme-search"
+          name="theme-search"
+          type="search"
+          aria-label="Custom search term"
           value={local}
           placeholder="…or type your own search term (e.g. northern lights)"
           className="pl-9"

@@ -10,19 +10,38 @@ const CORE_BASE = `${import.meta.env.BASE_URL}ffmpeg`;
 let ffmpeg: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
 
-async function getFFmpeg(onLog?: (msg: string) => void): Promise<FFmpeg> {
+// Ring buffer of the most recent ffmpeg log lines, surfaced on error so
+// failures are actually diagnosable in the UI/console.
+const recentLogs: string[] = [];
+function pushLog(line: string) {
+  recentLogs.push(line);
+  if (recentLogs.length > 25) recentLogs.shift();
+}
+export function getRecentFfmpegLog(): string {
+  return recentLogs.slice(-8).join("\n");
+}
+
+async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg) return ffmpeg;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    const instance = new FFmpeg();
-    if (onLog) instance.on("log", ({ message }) => onLog(message));
-    await instance.load({
-      coreURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, "application/wasm"),
-    });
-    ffmpeg = instance;
-    return instance;
+    try {
+      const instance = new FFmpeg();
+      instance.on("log", ({ message }) => pushLog(message));
+      const coreURL = await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, "text/javascript");
+      const wasmURL = await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, "application/wasm");
+      await instance.load({ coreURL, wasmURL });
+      ffmpeg = instance;
+      return instance;
+    } catch (e) {
+      loadPromise = null; // allow a retry on the next attempt
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Failed to load the video engine (ffmpeg.wasm): ${detail}. ` +
+          `Make sure ${CORE_BASE}/ffmpeg-core.wasm is reachable, and use an up-to-date desktop browser.`,
+      );
+    }
   })();
 
   return loadPromise;
@@ -62,7 +81,9 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
   const usedClips: VideoClip[] = [];
   const normalized: string[] = [];
   let expectedDuration = 0;
-  const failures: string[] = [];
+  let downloadFailures = 0;
+  let encodeFailures = 0;
+  let lastEncodeError = "";
 
   for (let i = 0; i < total; i++) {
     const clip = clips[i];
@@ -80,7 +101,8 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     try {
       data = await fetchClip(clip.url);
     } catch (e) {
-      failures.push(clip.url);
+      downloadFailures++;
+      pushLog(`download failed for clip ${clip.id}: ${e instanceof Error ? e.message : String(e)}`);
       continue; // skip unreachable / CORS-blocked clips
     }
 
@@ -112,15 +134,23 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
       usedClips.push(clip);
       expectedDuration += Math.min(clip.duration, perClipCap);
     } catch (e) {
-      failures.push(clip.url);
+      encodeFailures++;
+      lastEncodeError = e instanceof Error ? e.message : String(e);
     } finally {
       await ff.deleteFile(src).catch(() => {});
     }
   }
 
   if (normalized.length === 0) {
+    if (downloadFailures > 0 && encodeFailures === 0) {
+      throw new Error(
+        `All ${downloadFailures} clip downloads were blocked (likely a network/CORS issue reaching the Pexels CDN). ` +
+          `Try another theme, or check your connection.`,
+      );
+    }
     throw new Error(
-      "Could not process any clips. This is usually a network/CORS issue reaching the Pexels CDN — try again or pick another theme.",
+      `Could not process any clips (${encodeFailures} encode failures). ` +
+        (lastEncodeError ? `Last ffmpeg error: ${lastEncodeError}` : "See console for the ffmpeg log."),
     );
   }
 
@@ -155,7 +185,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
       ]);
       outputName = "final.mp4";
     } catch (e) {
-      // If mixing fails (e.g. unsupported audio), fall back to the silent cut.
+      pushLog(`music mix failed, exporting silent cut: ${e instanceof Error ? e.message : String(e)}`);
       outputName = "stitched.mp4";
     }
   }

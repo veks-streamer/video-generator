@@ -23,6 +23,9 @@ export function MusicPicker({ file, volume, onFile, onVolume }: Props) {
 
       <input
         ref={inputRef}
+        id="music-file"
+        name="music-file"
+        aria-label="Background music file"
         type="file"
         accept="audio/*"
         className="hidden"

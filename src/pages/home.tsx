@@ -17,7 +17,7 @@ import { aspectRatios, qualities, themes } from "@/lib/constants";
 import type { ProgressUpdate, VideoResult } from "@/lib/constants";
 import { hasPexelsKey, getPexelsKey } from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
-import { generateVideo } from "@/lib/video-generator";
+import { generateVideo, getRecentFfmpegLog } from "@/lib/video-generator";
 
 function even(n: number): number {
   return Math.max(2, Math.round(n / 2) * 2);
@@ -35,7 +35,9 @@ export default function Home() {
   const [musicFile, setMusicFile] = useState<File | null>(null);
   const [musicVolume, setMusicVolume] = useState(0.7);
 
+  const [showOverlay, setShowOverlay] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string>("");
   const [progress, setProgress] = useState<ProgressUpdate>({
     stage: "loading", progress: 0, message: "",
   });
@@ -49,10 +51,13 @@ export default function Home() {
 
   const query = customQuery.trim() || themes.find((t) => t.id === themeId)?.query || "";
   const canGenerate = keyReady && query.length > 0 && !isProcessing;
+  const isHeavy = duration > 180 || qualityId === "hd";
 
   async function handleGenerate() {
     if (!canGenerate) return;
     setResult(null);
+    setErrorDetails("");
+    setShowOverlay(true);
     setIsProcessing(true);
     setProgress({ stage: "searching", progress: 2, message: "Searching Pexels for clips…" });
 
@@ -61,9 +66,11 @@ export default function Home() {
       const quality = qualities.find((q) => q.id === qualityId)!;
       const width = even(aspect.width * quality.scale);
       const height = even(aspect.height * quality.scale);
+      // Fewer, longer clips for long videos keeps the browser's memory in check.
+      const perClipCap = duration > 180 ? 12 : 6;
 
       const found = await searchVideos(query, getPexelsKey(), duration);
-      const selected = selectClips(found, duration, 6);
+      const selected = selectClips(found, duration, perClipCap);
       if (selected.length === 0) throw new Error("No usable clips returned. Try another theme.");
 
       const themeLabel = customQuery.trim()
@@ -75,7 +82,7 @@ export default function Home() {
         width,
         height,
         crf: quality.crf,
-        perClipCap: 6,
+        perClipCap,
         musicFile,
         musicVolume,
         onProgress: setProgress,
@@ -92,11 +99,18 @@ export default function Home() {
         createdAt: new Date().toISOString(),
       });
       setIsProcessing(false);
+      setShowOverlay(false);
       toast({ title: "Video ready", description: "Preview and download it on the right." });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Video generation failed.";
+      // Surface the real cause: message in the panel, full detail in console.
+      console.error("[generate] failed:", err);
+      const message =
+        err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
+      const log = getRecentFfmpegLog();
+      setErrorDetails(log ? `${message}\n\n— ffmpeg log —\n${log}` : message);
       setProgress({ stage: "error", progress: 0, message });
       setIsProcessing(false);
+      // keep the overlay open so the error is readable
       toast({ title: "Error", description: message, variant: "destructive" });
     }
   }
@@ -189,16 +203,20 @@ export default function Home() {
                   onChange={setQualityId}
                 />
                 <Separator />
-                <DurationSlider value={duration} onChange={setDuration} />
+                <DurationSlider value={duration} onChange={setDuration} min={10} max={600} step={5} />
                 <Separator />
                 <MusicPicker file={musicFile} volume={musicVolume} onFile={setMusicFile} onVolume={setMusicVolume} />
+
+                {isHeavy && (
+                  <p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    Long or 1080p videos can take several minutes to encode in the browser and use a lot of memory. Use a desktop browser and keep the tab open.
+                  </p>
+                )}
 
                 <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full py-6 text-lg" size="lg">
                   <Play className="h-5 w-5 mr-2" /> Generate video
                 </Button>
-                <p className="text-xs text-center text-muted-foreground">
-                  Tip: longer or higher-quality videos take more time to encode in the browser.
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -212,7 +230,12 @@ export default function Home() {
         </div>
       </main>
 
-      <ProgressPanel progress={progress} visible={isProcessing} />
+      <ProgressPanel
+        progress={progress}
+        visible={showOverlay}
+        details={errorDetails}
+        onClose={() => setShowOverlay(false)}
+      />
     </div>
   );
 }
