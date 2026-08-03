@@ -1,5 +1,4 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { toBlobURL } from "@ffmpeg/util";
 import type { VideoClip, ProgressUpdate } from "./constants";
 
 // Core files are hosted alongside the app (same-origin) so we avoid any
@@ -29,9 +28,13 @@ async function getFFmpeg(): Promise<FFmpeg> {
     try {
       const instance = new FFmpeg();
       instance.on("log", ({ message }) => pushLog(message));
-      const coreURL = await toBlobURL(`${CORE_BASE}/ffmpeg-core.js`, "text/javascript");
-      const wasmURL = await toBlobURL(`${CORE_BASE}/ffmpeg-core.wasm`, "application/wasm");
-      await instance.load({ coreURL, wasmURL });
+      // @ffmpeg/ffmpeg spawns a *module* worker, so it loads the core via
+      // dynamic import(). That requires the ESM core (which has a default
+      // export) served same-origin — NOT the UMD build.
+      await instance.load({
+        coreURL: `${CORE_BASE}/ffmpeg-core.js`,
+        wasmURL: `${CORE_BASE}/ffmpeg-core.wasm`,
+      });
       ffmpeg = instance;
       return instance;
     } catch (e) {
