@@ -1,5 +1,6 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { VideoClip, ProgressUpdate } from "./constants";
+import { SHORT_SHA } from "../version";
 
 // Core files are hosted alongside the app (same-origin) so we avoid any
 // cross-origin-isolation / SharedArrayBuffer requirements. This is the
@@ -31,9 +32,12 @@ async function getFFmpeg(): Promise<FFmpeg> {
       // @ffmpeg/ffmpeg spawns a *module* worker, so it loads the core via
       // dynamic import(). That requires the ESM core (which has a default
       // export) served same-origin — NOT the UMD build.
+      // Cache-bust the unhashed core files so a new deploy never serves a
+      // stale engine from the browser cache.
+      const v = `?v=${SHORT_SHA}`;
       await instance.load({
-        coreURL: `${CORE_BASE}/ffmpeg-core.js`,
-        wasmURL: `${CORE_BASE}/ffmpeg-core.wasm`,
+        coreURL: `${CORE_BASE}/ffmpeg-core.js${v}`,
+        wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
       });
       ffmpeg = instance;
       return instance;
