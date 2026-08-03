@@ -1,8 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, DownloadCloud, Trash2, Film, Clock, Music } from "lucide-react";
+import { Download, DownloadCloud, Trash2, Film, Clock, Music, Timer } from "lucide-react";
 import type { VideoResult } from "@/lib/constants";
+import { formatElapsed } from "@/lib/constants";
 
 interface Props {
   results: VideoResult[];
@@ -39,7 +40,14 @@ export function ResultsGallery({ results, onDownload, onDownloadAll, onClear }: 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground">{results.length} video{results.length > 1 ? "s" : ""}</span>
+        <span className="text-sm text-muted-foreground">
+          {results.length} video{results.length > 1 ? "s" : ""}
+          {" · "}
+          <span className="inline-flex items-center gap-1">
+            <Timer className="h-3 w-3" />
+            {formatElapsed(results.reduce((a, r) => a + r.elapsedMs, 0))} total
+          </span>
+        </span>
         <div className="flex gap-2">
           <Button size="sm" onClick={onDownloadAll}>
             <DownloadCloud className="h-4 w-4 mr-2" /> Download all
@@ -66,6 +74,9 @@ export function ResultsGallery({ results, onDownload, onDownloadAll, onClear }: 
                 </Badge>
                 <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
                   <Music className="h-3 w-3" /> {r.musicLabel}
+                </Badge>
+                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
+                  <Timer className="h-3 w-3" /> {formatElapsed(r.elapsedMs)}
                 </Badge>
               </div>
               <Button size="sm" className="w-full" onClick={() => onDownload(r)}>

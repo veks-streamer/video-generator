@@ -14,7 +14,7 @@ import { ProgressPanel } from "@/components/progress-panel";
 import { ResultsGallery } from "@/components/results-gallery";
 import { Play, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge, Layers, Film } from "lucide-react";
 import {
-  aspectRatios, qualities, framerates, themes, randomTheme, RANDOM_THEME_ID,
+  aspectRatios, qualities, framerates, themes, randomTheme, RANDOM_THEME_ID, formatElapsed,
   generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_GENERATED, MUSIC_JAMENDO,
   MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
@@ -150,6 +150,7 @@ export default function Home() {
   }
 
   async function generateOne(index: number, total: number): Promise<VideoResult> {
+    const started = performance.now();
     const prefix = total > 1 ? `Video ${index + 1}/${total} — ` : "";
     const onProgress = (p: ProgressUpdate) => setProgress({ ...p, message: prefix + p.message });
 
@@ -189,6 +190,7 @@ export default function Home() {
       aspectLabel: `${aspect.label} · ${fps}fps`,
       musicLabel,
       createdAt: new Date().toISOString(),
+      elapsedMs: performance.now() - started,
     };
   }
 
@@ -207,6 +209,7 @@ export default function Home() {
     const total = count;
     const failures: string[] = [];
     let made = 0;
+    const batchStart = performance.now();
 
     for (let i = 0; i < total; i++) {
       try {
@@ -230,9 +233,16 @@ export default function Home() {
       notify("Video Generator", "Generation failed — open the tab for details.");
     } else {
       setShowOverlay(false);
-      const desc = failures.length ? `${failures.length} failed; the rest are below.` : "Ready to download.";
-      toast({ title: `Done — ${made} video${made > 1 ? "s" : ""} ready`, description: desc });
-      notify("Your videos are ready", `${made} video${made > 1 ? "s" : ""} generated and waiting for download.`);
+      const totalMs = performance.now() - batchStart;
+      const avgMs = totalMs / made;
+      const timeStr = total > 1
+        ? `${formatElapsed(totalMs)} total (~${formatElapsed(avgMs)}/video)`
+        : `in ${formatElapsed(totalMs)}`;
+      const desc = failures.length
+        ? `${failures.length} failed; the rest are below. Took ${formatElapsed(totalMs)}.`
+        : `Done ${timeStr}.`;
+      toast({ title: `${made} video${made > 1 ? "s" : ""} ready`, description: desc });
+      notify("Your videos are ready", `${made} video${made > 1 ? "s" : ""} in ${formatElapsed(totalMs)} — waiting for download.`);
     }
   }
 

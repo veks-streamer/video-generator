@@ -101,7 +101,9 @@ export interface Framerate {
 
 export const framerates: Framerate[] = [
   { id: "24", label: "24 fps", fps: 24, icon: Film },
+  { id: "25", label: "25 fps", fps: 25, icon: Film },
   { id: "30", label: "30 fps", fps: 30, icon: Film },
+  { id: "50", label: "50 fps", fps: 50, icon: Film },
   { id: "60", label: "60 fps", fps: 60, icon: Film },
 ];
 
@@ -184,4 +186,14 @@ export interface VideoResult {
   aspectLabel: string;
   musicLabel: string;
   createdAt: string;
+  elapsedMs: number;
+}
+
+/** Human-friendly elapsed time, e.g. "42s" or "3m 05s". */
+export function formatElapsed(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}m ${r.toString().padStart(2, "0")}s`;
 }
