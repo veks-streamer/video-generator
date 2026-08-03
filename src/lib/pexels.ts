@@ -28,17 +28,14 @@ interface PexelsSearchResponse {
  * Search Pexels for landscape/portrait clips matching a query.
  * Runs entirely in the browser using the user's own API key.
  */
-export async function searchVideos(
+async function fetchPage(
   query: string,
   apiKey: string,
-  targetDuration: number,
-): Promise<VideoClip[]> {
-  const avgClip = 8;
-  const needed = Math.ceil(targetDuration / avgClip) + 3;
-  const perPage = Math.min(Math.max(needed * 2, 15), 80);
-
+  page: number,
+): Promise<PexelsVideo[]> {
+  // Max pool per page for variety; pagination gives us fresh clips on repeats.
   const res = await fetch(
-    `${BASE_URL}/search?query=${encodeURIComponent(query)}&per_page=${perPage}&size=medium`,
+    `${BASE_URL}/search?query=${encodeURIComponent(query)}&per_page=80&page=${page}&size=medium`,
     { headers: { Authorization: apiKey } },
   );
 
@@ -53,11 +50,25 @@ export async function searchVideos(
   }
 
   const data: PexelsSearchResponse = await res.json();
-  if (!data.videos?.length) {
+  return data.videos ?? [];
+}
+
+export async function searchVideos(
+  query: string,
+  apiKey: string,
+  _targetDuration: number,
+  page = 1,
+): Promise<VideoClip[]> {
+  let videos = await fetchPage(query, apiKey, page);
+  // If we paged past the end, fall back to page 1 so we still get results.
+  if (videos.length === 0 && page > 1) {
+    videos = await fetchPage(query, apiKey, 1);
+  }
+  if (videos.length === 0) {
     throw new Error(`No clips found for "${query}". Try a different theme or search term.`);
   }
 
-  return data.videos
+  return videos
     .filter((v) => v.duration >= 4 && v.duration <= 25)
     .map((v) => {
       // Prefer a compact SD/HD file (~640-1280 wide) to keep browser
@@ -82,16 +93,29 @@ export async function searchVideos(
     .filter((c) => c.url);
 }
 
-/** Pick a shuffled subset of clips that roughly fills the target duration. */
+/**
+ * Pick a shuffled subset of clips that roughly fills the target duration.
+ * Clips whose id is in `exclude` (already used in previous videos) are pushed
+ * to the back, so fresh clips are always preferred and repeats only happen
+ * when there simply aren't enough new clips to fill the duration.
+ */
 export function selectClips(
   clips: VideoClip[],
   targetDuration: number,
   perClipCap = 6,
+  exclude?: Set<number>,
 ): VideoClip[] {
   const shuffled = [...clips].sort(() => Math.random() - 0.5);
+  const ordered = exclude
+    ? [
+        ...shuffled.filter((c) => !exclude.has(c.id)),
+        ...shuffled.filter((c) => exclude.has(c.id)),
+      ]
+    : shuffled;
+
   const selected: VideoClip[] = [];
   let total = 0;
-  for (const clip of shuffled) {
+  for (const clip of ordered) {
     if (total >= targetDuration) break;
     if (selected.some((c) => c.id === clip.id)) continue;
     selected.push(clip);

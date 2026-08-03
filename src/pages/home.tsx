@@ -15,7 +15,7 @@ import { VideoPreview } from "@/components/video-preview";
 import { Play, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge } from "lucide-react";
 import { aspectRatios, qualities, themes } from "@/lib/constants";
 import type { ProgressUpdate, VideoResult } from "@/lib/constants";
-import { hasPexelsKey, getPexelsKey } from "@/lib/storage";
+import { hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage } from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
 import { generateVideo, getRecentFfmpegLog } from "@/lib/video-generator";
 
@@ -69,8 +69,12 @@ export default function Home() {
       // Fewer, longer clips for long videos keeps the browser's memory in check.
       const perClipCap = duration > 180 ? 12 : 6;
 
-      const found = await searchVideos(query, getPexelsKey(), duration);
-      const selected = selectClips(found, duration, perClipCap);
+      // Rotate the Pexels page and skip clips used in previous videos so
+      // consecutive generations don't reuse the same footage.
+      const page = nextQueryPage(query);
+      const used = getUsedClipIds();
+      const found = await searchVideos(query, getPexelsKey(), duration, page);
+      const selected = selectClips(found, duration, perClipCap, used);
       if (selected.length === 0) throw new Error("No usable clips returned. Try another theme.");
 
       const themeLabel = customQuery.trim()
@@ -87,6 +91,8 @@ export default function Home() {
         musicVolume,
         onProgress: setProgress,
       });
+
+      addUsedClipIds(usedClips.map((c) => c.id));
 
       const url = URL.createObjectURL(blob);
       setResult({
