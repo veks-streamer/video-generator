@@ -62,6 +62,7 @@ export interface GenerateOptions {
   fps: number;
   perClipCap: number;
   targetDuration: number; // exact output length in seconds
+  fast: boolean;          // fast mode = join without re-encoding
   music: { bytes: Uint8Array; loop: boolean; volume: number } | null;
   onProgress: (p: ProgressUpdate) => void;
 }
@@ -80,10 +81,12 @@ async function fetchClip(url: string): Promise<Uint8Array> {
 }
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
-  const { clips, width, height, crf, fps, perClipCap, targetDuration, music, onProgress } = opts;
+  const { clips, width, height, crf, fps, perClipCap, targetDuration, fast, music, onProgress } = opts;
 
   onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
   const ff = await getFFmpeg();
+
+  if (fast) return generateFast(ff, opts);
 
   const usedClips: VideoClip[] = [];
   const normalized: string[] = [];
@@ -233,5 +236,96 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
 
   onProgress({ stage: "complete", progress: 100, message: "Your video is ready!" });
 
+  return { blob, duration: realDuration, usedClips };
+}
+
+// Fast mode: clips already share the exact same resolution & fps, so we join
+// them with a stream copy (NO re-encode) and trim to length. Much faster, but
+// clip boundaries may not be perfectly smooth and the length is approximate.
+async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<GenerateOutput> {
+  const { clips, targetDuration, music, onProgress } = opts;
+  const usedClips: VideoClip[] = [];
+  const parts: string[] = [];
+  let acc = 0;
+  let downloadFailures = 0;
+
+  for (let i = 0; i < clips.length && acc < targetDuration + 8; i++) {
+    const clip = clips[i];
+    onProgress({
+      stage: "downloading",
+      progress: 8 + Math.min(80, (acc / targetDuration) * 80),
+      message: `Fast mode — fetching footage… ${Math.round(acc)}s / ${Math.round(targetDuration)}s`,
+    });
+    try {
+      const data = await fetchClip(clip.url);
+      const name = `f${i}.mp4`;
+      await ff.writeFile(name, data);
+      parts.push(name);
+      usedClips.push(clip);
+      acc += Math.min(clip.duration, opts.perClipCap * 3); // fast mode uses whole clips
+    } catch (e) {
+      downloadFailures++;
+      pushLog(`fast download failed for clip ${clip.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  if (parts.length === 0) {
+    throw new Error(
+      `All clip downloads were blocked (${downloadFailures}) — likely a network/CORS issue reaching the Pexels CDN.`,
+    );
+  }
+
+  const realDuration = Math.min(targetDuration, Math.max(1, Math.round(acc)));
+
+  onProgress({ stage: "stitching", progress: 88, message: "Fast mode — joining clips (no re-encode)…" });
+  const list = parts.map((f) => `file '${f}'`).join("\n");
+  await ff.writeFile("concat.txt", new TextEncoder().encode(list));
+
+  let outputName = "video.mp4";
+  try {
+    await ff.exec([
+      "-f", "concat", "-safe", "0", "-i", "concat.txt",
+      "-t", String(realDuration),
+      "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4",
+    ]);
+  } catch (e) {
+    throw new Error(
+      "Fast mode couldn't join these clips without re-encoding (incompatible streams). Try Standard mode.",
+    );
+  }
+
+  if (music) {
+    onProgress({ stage: "audio", progress: 94, message: "Fast mode — adding music…" });
+    await ff.writeFile("music_in", music.bytes);
+    const vol = Math.max(0, Math.min(2, music.volume));
+    const fo = Math.min(1.0, realDuration * 0.6);
+    const af = `volume=${vol},afade=t=in:st=0:d=0.5,afade=t=out:st=${Math.max(0, realDuration - fo).toFixed(3)}:d=${fo.toFixed(3)}`;
+    try {
+      await ff.exec([
+        "-i", "video.mp4",
+        ...(music.loop ? ["-stream_loop", "-1"] : []),
+        "-i", "music_in",
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-af", af, "-t", String(realDuration),
+        "-movflags", "+faststart", "-y", "final.mp4",
+      ]);
+      outputName = "final.mp4";
+    } catch (e) {
+      pushLog(`fast music mix failed: ${e instanceof Error ? e.message : String(e)}`);
+      outputName = "video.mp4";
+    }
+  }
+
+  const data = (await ff.readFile(outputName)) as Uint8Array;
+  const blob = new Blob([new Uint8Array(data)], { type: "video/mp4" });
+
+  for (const f of parts) await ff.deleteFile(f).catch(() => {});
+  await ff.deleteFile("concat.txt").catch(() => {});
+  await ff.deleteFile("video.mp4").catch(() => {});
+  await ff.deleteFile("music_in").catch(() => {});
+  await ff.deleteFile("final.mp4").catch(() => {});
+
+  onProgress({ stage: "complete", progress: 100, message: "Your video is ready!" });
   return { blob, duration: realDuration, usedClips };
 }

@@ -7,6 +7,7 @@ import { formatElapsed } from "@/lib/constants";
 
 interface Props {
   results: VideoResult[];
+  usage?: string;
   onDownload: (r: VideoResult) => void;
   onDownloadAll: () => void;
   onClear: () => void;
@@ -18,7 +19,7 @@ function fmt(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export function ResultsGallery({ results, onDownload, onDownloadAll, onClear }: Props) {
+export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onClear }: Props) {
   if (results.length === 0) {
     return (
       <Card className="aspect-video flex items-center justify-center bg-muted/30">
@@ -47,19 +48,21 @@ export function ResultsGallery({ results, onDownload, onDownloadAll, onClear }: 
             <Timer className="h-3 w-3" />
             {formatElapsed(results.reduce((a, r) => a + r.elapsedMs, 0))} total
           </span>
+          {usage ? <span className="ml-1">· {usage} stored</span> : null}
         </span>
         <div className="flex gap-2">
           <Button size="sm" onClick={onDownloadAll}>
             <DownloadCloud className="h-4 w-4 mr-2" /> Download all
           </Button>
-          <Button size="sm" variant="outline" onClick={onClear}>
-            <Trash2 className="h-4 w-4 mr-2" /> Clear
+          <Button size="sm" variant="outline" onClick={onClear} title="Delete all saved videos from this browser to free space">
+            <Trash2 className="h-4 w-4 mr-2" /> Clear cache
           </Button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground -mt-2">
         <Timer className="h-3 w-3 inline mr-1" />
         Times show how long each video took to <strong>generate</strong> — not the video's length.
+        Videos are saved in this browser and stay here across visits until you press <strong>Clear cache</strong>.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -15,15 +15,14 @@ const BASE = "https://api.jamendo.com/v3.0/tracks";
 export async function searchJamendo(
   clientId: string,
   tag: string,
-  limit = 60,
+  limit = 200,
 ): Promise<JamendoTrack[]> {
   const params = new URLSearchParams({
     client_id: clientId,
     format: "json",
     limit: String(limit),
     audioformat: "mp32",
-    include: "musicinfo",
-    groupby: "artist_id",
+    include: "musicinfo licenses",
     order: "popularity_month",
     vocalinstrumental: "instrumental",
     fuzzytags: tag,
@@ -44,8 +43,11 @@ export async function searchJamendo(
     if (u.includes("-nc") || u.includes("-nd")) return false; // no non-commercial / no-derivatives
     return u.includes("/by/") || u.includes("/by-sa/");        // BY or BY-SA allow commercial + editing
   };
-  return results
-    .filter((t) => t.audio && commercialOk(t.license_ccurl))
+  const commercial = results.filter((t) => t.audio && commercialOk(t.license_ccurl));
+  if (results.length > 0 && commercial.length === 0) {
+    throw new Error("Jamendo returned tracks, but none with a commercial license (CC-BY/BY-SA) for this genre. Try another genre.");
+  }
+  return commercial
     .map((t) => ({
       id: String(t.id),
       name: t.name ?? "Track",

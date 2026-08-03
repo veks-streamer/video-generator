@@ -107,6 +107,31 @@ export const framerates: Framerate[] = [
   { id: "60", label: "60 fps", fps: 60, icon: Film },
 ];
 
+export interface EncodingMode { id: string; label: string; icon: LucideIcon; }
+export const MODE_STANDARD = "standard";
+export const MODE_FAST = "fast";
+export const encodingModes: EncodingMode[] = [
+  { id: MODE_STANDARD, label: "Standard", icon: Sparkles },
+  { id: MODE_FAST, label: "Fast (raw)", icon: Zap },
+];
+
+/**
+ * Fast mode joins clips WITHOUT re-encoding, so every clip must share the exact
+ * same dimensions. Snap the quality+aspect to a real Pexels render size. Returns
+ * null for square (Pexels has no native square render → needs re-encoding).
+ */
+export function fastStdSize(aspectId: string, qualityId: string): { w: number; h: number } | null {
+  const land: Record<string, [number, number]> = {
+    fast: [960, 540], balanced: [1280, 720], hd: [1920, 1080],
+  };
+  const port: Record<string, [number, number]> = {
+    fast: [540, 960], balanced: [720, 1280], hd: [1080, 1920],
+  };
+  if (aspectId === "landscape") { const d = land[qualityId] ?? land.balanced; return { w: d[0], h: d[1] }; }
+  if (aspectId === "portrait") { const d = port[qualityId] ?? port.balanced; return { w: d[0], h: d[1] }; }
+  return null; // square unsupported in fast mode
+}
+
 // ---- Background music ----
 export interface MusicGenre {
   id: string;
@@ -181,7 +206,6 @@ export interface VideoResult {
   url: string;
   blob: Blob;
   duration: number;
-  clips: VideoClip[];
   themeLabel: string;
   aspectLabel: string;
   musicLabel: string;

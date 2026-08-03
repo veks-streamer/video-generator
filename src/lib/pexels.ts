@@ -48,16 +48,15 @@ function pickStrictFile(
   targetFps: number,
   targetW: number,
   targetH: number,
+  exact: boolean,
 ): { url: string; width: number; height: number; fps: number } | null {
-  const valid = v.video_files.filter(
-    (f) =>
-      f.file_type === "video/mp4" &&
-      f.link &&
-      f.width && f.height && f.fps != null &&
-      Math.round(f.fps) === targetFps &&
-      f.width >= targetW &&
-      f.height >= targetH,
-  );
+  const valid = v.video_files.filter((f) => {
+    if (f.file_type !== "video/mp4" || !f.link || !f.width || !f.height || f.fps == null) return false;
+    if (Math.round(f.fps) !== targetFps) return false;
+    return exact
+      ? f.width === targetW && f.height === targetH   // fast mode: identical size (no scaling)
+      : f.width >= targetW && f.height >= targetH;     // standard: >= target (clean downscale)
+  });
   if (valid.length === 0) return null;
   valid.sort((a, b) => (a.width! * a.height!) - (b.width! * b.height!));
   const f = valid[0];
@@ -72,6 +71,7 @@ export async function searchVideos(
   targetFps = 30,
   targetWidth = 1280,
   targetHeight = 720,
+  exact = false,
 ): Promise<VideoClip[]> {
   const needed = Math.ceil(targetDuration / 5) + 3;
   const clips: VideoClip[] = [];
@@ -85,7 +85,7 @@ export async function searchVideos(
     scanned += videos.length;
     for (const v of videos) {
       if (v.duration < 4 || v.duration > 25) continue;
-      const f = pickStrictFile(v, targetFps, targetWidth, targetHeight);
+      const f = pickStrictFile(v, targetFps, targetWidth, targetHeight, exact);
       if (!f) continue;
       if (clips.some((c) => c.id === v.id)) continue;
       clips.push({
@@ -105,9 +105,10 @@ export async function searchVideos(
 
   if (clips.length === 0) {
     throw new Error(
-      `No “${query}” clips available at ${targetWidth}×${targetHeight} @ ${targetFps}fps. ` +
-        `Pexels doesn't have enough source footage at that exact framerate/resolution — ` +
-        `try a lower framerate (e.g. 30fps), lower quality, or another theme.`,
+      `No “${query}” clips available at ${exact ? "exactly " : ""}${targetWidth}×${targetHeight} @ ${targetFps}fps. ` +
+        (exact
+          ? `Fast mode needs clips at that exact size — try Standard mode, a different quality/framerate, or another theme.`
+          : `Try a lower framerate (e.g. 30fps), lower quality, or another theme.`),
     );
   }
   return clips;

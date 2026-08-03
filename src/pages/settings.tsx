@@ -163,6 +163,7 @@ export default function Settings() {
             <CardDescription>
               Optional. Enables real royalty-free (Creative Commons) instrumental music by genre, downloaded
               in your browser and cut to the video length. Without it, the built-in generated music is used.
+              Only the <strong>Client ID</strong> is needed here — not the Client Secret.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
