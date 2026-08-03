@@ -10,7 +10,6 @@ interface PexelsVideoFile {
   fps: number | null;
   link: string;
 }
-
 interface PexelsVideo {
   id: number;
   duration: number;
@@ -20,14 +19,11 @@ interface PexelsVideo {
   video_files: PexelsVideoFile[];
   user: { name: string };
 }
-
-interface PexelsSearchResponse {
-  videos: PexelsVideo[];
-}
+interface PexelsSearchResponse { videos: PexelsVideo[] }
 
 async function fetchPage(query: string, apiKey: string, page: number): Promise<PexelsVideo[]> {
   const res = await fetch(
-    `${BASE_URL}/search?query=${encodeURIComponent(query)}&per_page=80&page=${page}&orientation=landscape&size=medium`,
+    `${BASE_URL}/search?query=${encodeURIComponent(query)}&per_page=80&page=${page}&size=large`,
     { headers: { Authorization: apiKey } },
   );
   if (res.status === 401) throw new Error("Pexels rejected the API key (401). Check it in Settings.");
@@ -38,80 +34,88 @@ async function fetchPage(query: string, apiKey: string, page: number): Promise<P
 }
 
 /**
- * Pick the best mp4 file for a clip given the target fps and target width.
- * Preference order:
- *   1. files whose fps matches the target (native fps — no fps conversion)
- *   2. among those, the smallest file that is still >= target width
- *      (so we always downscale, never upscale)
- * Falls back to the closest-fps / largest file if nothing native is available.
+ * STRICT file selection. Only returns a file that:
+ *   - is mp4
+ *   - has EXACTLY the requested fps (native — no fps conversion, ever)
+ *   - is >= the target resolution in BOTH width and height (so we only ever
+ *     downscale, never upscale)
+ * Among valid files it takes the smallest one that still covers the target
+ * (cleanest downscale). Returns null when the clip has no qualifying file, in
+ * which case the clip is skipped entirely.
  */
-function pickFile(
+function pickStrictFile(
   v: PexelsVideo,
   targetFps: number,
-  targetWidth: number,
-): { url: string; width: number; height: number; fps: number; nativeFps: boolean } | null {
-  const files = v.video_files.filter((f) => f.file_type === "video/mp4" && f.link && f.width && f.height);
-  if (files.length === 0) return null;
-
-  const fpsOf = (f: PexelsVideoFile) => Math.round(f.fps ?? 30);
-  const native = files.filter((f) => fpsOf(f) === targetFps);
-
-  const chooseByWidth = (pool: PexelsVideoFile[]) => {
-    const atLeast = pool
-      .filter((f) => (f.width ?? 0) >= targetWidth)
-      .sort((a, b) => (a.width ?? 0) - (b.width ?? 0));
-    if (atLeast.length) return atLeast[0]; // smallest that still covers target → clean downscale
-    return [...pool].sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]; // largest available
-  };
-
-  if (native.length) {
-    const f = chooseByWidth(native);
-    return { url: f.link, width: f.width!, height: f.height!, fps: fpsOf(f), nativeFps: true };
-  }
-  // no native-fps file: take the closest fps, largest resolution
-  const f = chooseByWidth(files);
-  return { url: f.link, width: f.width!, height: f.height!, fps: fpsOf(f), nativeFps: false };
+  targetW: number,
+  targetH: number,
+): { url: string; width: number; height: number; fps: number } | null {
+  const valid = v.video_files.filter(
+    (f) =>
+      f.file_type === "video/mp4" &&
+      f.link &&
+      f.width && f.height && f.fps != null &&
+      Math.round(f.fps) === targetFps &&
+      f.width >= targetW &&
+      f.height >= targetH,
+  );
+  if (valid.length === 0) return null;
+  valid.sort((a, b) => (a.width! * a.height!) - (b.width! * b.height!));
+  const f = valid[0];
+  return { url: f.link, width: f.width!, height: f.height!, fps: Math.round(f.fps!) };
 }
 
 export async function searchVideos(
   query: string,
   apiKey: string,
-  _targetDuration: number,
+  targetDuration: number,
   page = 1,
   targetFps = 30,
   targetWidth = 1280,
+  targetHeight = 720,
 ): Promise<VideoClip[]> {
-  let videos = await fetchPage(query, apiKey, page);
-  if (videos.length === 0 && page > 1) videos = await fetchPage(query, apiKey, 1);
-  if (videos.length === 0) {
-    throw new Error(`No clips found for "${query}". Try a different theme or search term.`);
+  const needed = Math.ceil(targetDuration / 5) + 3;
+  const clips: VideoClip[] = [];
+  let scanned = 0;
+
+  // Scan up to 4 pages (rotating from `page`) to find enough strictly-matching clips.
+  for (let i = 0; i < 4; i++) {
+    const pnum = ((page - 1 + i) % 100) + 1;
+    const videos = await fetchPage(query, apiKey, pnum);
+    if (videos.length === 0) break;
+    scanned += videos.length;
+    for (const v of videos) {
+      if (v.duration < 4 || v.duration > 25) continue;
+      const f = pickStrictFile(v, targetFps, targetWidth, targetHeight);
+      if (!f) continue;
+      if (clips.some((c) => c.id === v.id)) continue;
+      clips.push({
+        id: v.id,
+        duration: v.duration,
+        width: f.width,
+        height: f.height,
+        fps: f.fps,
+        nativeFps: true,
+        url: f.url,
+        thumbnail: v.image,
+        videographer: v.user?.name ?? "Pexels",
+      });
+    }
+    if (clips.length >= needed * 2) break;
   }
 
-  const clips: VideoClip[] = [];
-  for (const v of videos) {
-    if (v.duration < 4 || v.duration > 25) continue;
-    const f = pickFile(v, targetFps, targetWidth);
-    if (!f) continue;
-    clips.push({
-      id: v.id,
-      duration: v.duration,
-      width: f.width,
-      height: f.height,
-      fps: f.fps,
-      nativeFps: f.nativeFps,
-      url: f.url,
-      thumbnail: v.image,
-      videographer: v.user?.name ?? "Pexels",
-    });
+  if (clips.length === 0) {
+    throw new Error(
+      `No “${query}” clips available at ${targetWidth}×${targetHeight} @ ${targetFps}fps. ` +
+        `Pexels doesn't have enough source footage at that exact framerate/resolution — ` +
+        `try a lower framerate (e.g. 30fps), lower quality, or another theme.`,
+    );
   }
   return clips;
 }
 
 /**
- * Pick a shuffled subset that fills the target duration. Prefers:
- *   1. native-fps clips (so no fps conversion is needed)
- *   2. clips not used in previous videos (avoid repeats across a batch)
- * Only falls back to non-native / already-used clips when there aren't enough.
+ * Pick a shuffled subset that fills the target duration, preferring clips not
+ * used in previous videos. All candidates already match fps/resolution strictly.
  */
 export function selectClips(
   clips: VideoClip[],
@@ -120,9 +124,9 @@ export function selectClips(
   exclude?: Set<number>,
 ): VideoClip[] {
   const shuffled = [...clips].sort(() => Math.random() - 0.5);
-  const rank = (c: VideoClip) =>
-    (c.nativeFps ? 0 : 2) + (exclude?.has(c.id) ? 1 : 0); // lower is better
-  const ordered = shuffled.sort((a, b) => rank(a) - rank(b));
+  const ordered = exclude
+    ? [...shuffled.filter((c) => !exclude.has(c.id)), ...shuffled.filter((c) => exclude.has(c.id))]
+    : shuffled;
 
   const selected: VideoClip[] = [];
   let total = 0;

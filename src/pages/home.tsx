@@ -166,7 +166,7 @@ export default function Home() {
     onProgress({ stage: "searching", progress: 2, message: `Searching “${label}” (${fps}fps)…` });
     const page = nextQueryPage(query);
     const used = getUsedClipIds();
-    const found = await searchVideos(query, getPexelsKey(), duration, page, fps, width);
+    const found = await searchVideos(query, getPexelsKey(), duration, page, fps, width, height);
     const selected = selectClips(found, duration, perClipCap, used);
     if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
 
