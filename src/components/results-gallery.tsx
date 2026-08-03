@@ -57,6 +57,10 @@ export function ResultsGallery({ results, onDownload, onDownloadAll, onClear }: 
           </Button>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground -mt-2">
+        <Timer className="h-3 w-3 inline mr-1" />
+        Times show how long each video took to <strong>generate</strong> — not the video's length.
+      </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {results.map((r) => (
@@ -75,8 +79,8 @@ export function ResultsGallery({ results, onDownload, onDownloadAll, onClear }: 
                 <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
                   <Music className="h-3 w-3" /> {r.musicLabel}
                 </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
-                  <Timer className="h-3 w-3" /> {formatElapsed(r.elapsedMs)}
+                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]" title="Time it took to generate this video">
+                  <Timer className="h-3 w-3" /> {formatElapsed(r.elapsedMs)} to make
                 </Badge>
               </div>
               <Button size="sm" className="w-full" onClick={() => onDownload(r)}>

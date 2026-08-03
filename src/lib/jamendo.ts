@@ -38,8 +38,14 @@ export async function searchJamendo(
     throw new Error(`Jamendo: ${data.headers.error_message || "request failed"}`);
   }
   const results = (data?.results ?? []) as any[];
+  const commercialOk = (url: string) => {
+    const u = (url || "").toLowerCase();
+    if (!u.includes("creativecommons.org")) return false;
+    if (u.includes("-nc") || u.includes("-nd")) return false; // no non-commercial / no-derivatives
+    return u.includes("/by/") || u.includes("/by-sa/");        // BY or BY-SA allow commercial + editing
+  };
   return results
-    .filter((t) => t.audio)
+    .filter((t) => t.audio && commercialOk(t.license_ccurl))
     .map((t) => ({
       id: String(t.id),
       name: t.name ?? "Track",

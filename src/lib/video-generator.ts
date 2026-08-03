@@ -61,6 +61,7 @@ export interface GenerateOptions {
   crf: number;
   fps: number;
   perClipCap: number;
+  targetDuration: number; // exact output length in seconds
   music: { bytes: Uint8Array; loop: boolean; volume: number } | null;
   onProgress: (p: ProgressUpdate) => void;
 }
@@ -79,29 +80,33 @@ async function fetchClip(url: string): Promise<Uint8Array> {
 }
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
-  const { clips, width, height, crf, fps, perClipCap, music, onProgress } = opts;
+  const { clips, width, height, crf, fps, perClipCap, targetDuration, music, onProgress } = opts;
 
   onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
   const ff = await getFFmpeg();
 
-  const total = clips.length;
   const usedClips: VideoClip[] = [];
   const normalized: string[] = [];
-  let expectedDuration = 0;
   let downloadFailures = 0;
   let encodeFailures = 0;
   let lastEncodeError = "";
 
-  for (let i = 0; i < total; i++) {
+  const FADE_IN = 0.6;
+  const FADE_OUT = 1.0;
+  let remaining = targetDuration;
+
+  // Fill the timeline to EXACTLY targetDuration. The last needed clip is trimmed
+  // to the remaining time; fade-in is baked into the first clip and fade-out into
+  // the finishing clip — all inside the normalize pass, so no extra full re-encode.
+  for (let i = 0; i < clips.length && remaining > 0.05; i++) {
     const clip = clips[i];
-    const base = 10 + (i / total) * 68;
+    const done = targetDuration - remaining;
+    const base = 10 + (done / targetDuration) * 68;
 
     onProgress({
       stage: "downloading",
       progress: base,
-      message: `Downloading clip ${i + 1} of ${total}…`,
-      currentStep: i + 1,
-      totalSteps: total,
+      message: `Fetching footage… ${Math.round(done)}s / ${Math.round(targetDuration)}s`,
     });
 
     let data: Uint8Array;
@@ -110,8 +115,13 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     } catch (e) {
       downloadFailures++;
       pushLog(`download failed for clip ${clip.id}: ${e instanceof Error ? e.message : String(e)}`);
-      continue; // skip unreachable / CORS-blocked clips
+      continue;
     }
+
+    const full = Math.min(clip.duration, perClipCap);
+    const willFinish = full >= remaining - 1e-6;
+    const len = Math.min(full, remaining);
+    const isFirst = usedClips.length === 0;
 
     const src = `src${i}.mp4`;
     const out = `n${i}.mp4`;
@@ -119,19 +129,27 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
 
     onProgress({
       stage: "encoding",
-      progress: base + (0.5 / total) * 68,
-      message: `Processing clip ${i + 1} of ${total}…`,
-      currentStep: i + 1,
-      totalSteps: total,
+      progress: base + (0.5 / clips.length) * 68,
+      message: `Processing footage… ${Math.round(done)}s / ${Math.round(targetDuration)}s`,
     });
+
+    let vf =
+      `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,` +
+      `crop=${width}:${height},setsar=1,fps=${fps},format=yuv420p`;
+    if (isFirst) {
+      const fi = Math.min(FADE_IN, len * 0.5);
+      vf += `,fade=t=in:st=0:d=${fi.toFixed(3)}`;
+    }
+    if (willFinish) {
+      const fo = Math.min(FADE_OUT, len * 0.6);
+      vf += `,fade=t=out:st=${Math.max(0, len - fo).toFixed(3)}:d=${fo.toFixed(3)}`;
+    }
 
     try {
       await ff.exec([
         "-i", src,
-        "-t", String(perClipCap),
-        "-vf",
-        `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,` +
-          `crop=${width}:${height},setsar=1,fps=${fps},format=yuv420p`,
+        "-t", String(len),
+        "-vf", vf,
         "-an",
         "-r", String(fps),
         "-c:v", "libx264",
@@ -142,7 +160,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
       ]);
       normalized.push(out);
       usedClips.push(clip);
-      expectedDuration += Math.min(clip.duration, perClipCap);
+      remaining -= len;
     } catch (e) {
       encodeFailures++;
       lastEncodeError = e instanceof Error ? e.message : String(e);
@@ -154,8 +172,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
   if (normalized.length === 0) {
     if (downloadFailures > 0 && encodeFailures === 0) {
       throw new Error(
-        `All ${downloadFailures} clip downloads were blocked (likely a network/CORS issue reaching the Pexels CDN). ` +
-          `Try another theme, or check your connection.`,
+        `All ${downloadFailures} clip downloads were blocked (likely a network/CORS issue reaching the Pexels CDN). Try another theme or check your connection.`,
       );
     }
     throw new Error(
@@ -164,46 +181,42 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     );
   }
 
-  // Concatenate normalized clips (all share identical codec params → stream copy).
+  const realDuration = targetDuration - Math.max(0, remaining);
+
+  // Concatenate (identical codec params → stream copy, no re-encode). The result
+  // is already exactly realDuration with baked fades.
   onProgress({ stage: "stitching", progress: 82, message: "Stitching clips together…" });
   const list = normalized.map((f) => `file '${f}'`).join("\n");
   await ff.writeFile("concat.txt", new TextEncoder().encode(list));
   await ff.exec([
     "-f", "concat", "-safe", "0", "-i", "concat.txt",
-    "-c", "copy", "-movflags", "+faststart", "-y", "stitched.mp4",
+    "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4",
   ]);
 
-  let outputName = "stitched.mp4";
+  let outputName = "video.mp4";
 
-  // Optional background music, mixed at the exact video length with a fade-out.
+  // Mix background music (video stays copy — fast), trimmed to the exact length.
   if (music) {
     onProgress({ stage: "audio", progress: 92, message: "Mixing in background music…" });
     await ff.writeFile("music_in", music.bytes);
-    const dur = Math.max(1, Math.round(expectedDuration));
-    const fadeStart = Math.max(0, dur - 2);
     const vol = Math.max(0, Math.min(2, music.volume));
-    const af = `volume=${vol},afade=t=out:st=${fadeStart}:d=2`;
+    const fo = Math.min(FADE_OUT, realDuration * 0.6);
+    const af = `volume=${vol},afade=t=in:st=0:d=0.5,afade=t=out:st=${Math.max(0, realDuration - fo).toFixed(3)}:d=${fo.toFixed(3)}`;
     try {
-      const args = music.loop
-        ? [
-            "-i", "stitched.mp4",
-            "-stream_loop", "-1", "-i", "music_in",
-            "-map", "0:v", "-map", "1:a",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-            "-af", af, "-t", String(dur), "-movflags", "+faststart", "-y", "final.mp4",
-          ]
-        : [
-            "-i", "stitched.mp4",
-            "-i", "music_in",
-            "-map", "0:v", "-map", "1:a",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-            "-af", af, "-t", String(dur), "-movflags", "+faststart", "-y", "final.mp4",
-          ];
+      const args = [
+        "-i", "video.mp4",
+        ...(music.loop ? ["-stream_loop", "-1"] : []),
+        "-i", "music_in",
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-af", af, "-t", String(realDuration),
+        "-movflags", "+faststart", "-y", "final.mp4",
+      ];
       await ff.exec(args);
       outputName = "final.mp4";
     } catch (e) {
       pushLog(`music mix failed, exporting silent cut: ${e instanceof Error ? e.message : String(e)}`);
-      outputName = "stitched.mp4";
+      outputName = "video.mp4";
     }
   }
 
@@ -212,14 +225,13 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
   const bytes = fileData as Uint8Array;
   const blob = new Blob([new Uint8Array(bytes)], { type: "video/mp4" });
 
-  // Best-effort cleanup so repeated runs don't leak MEMFS memory.
   for (const f of normalized) await ff.deleteFile(f).catch(() => {});
   await ff.deleteFile("concat.txt").catch(() => {});
-  await ff.deleteFile("stitched.mp4").catch(() => {});
+  await ff.deleteFile("video.mp4").catch(() => {});
   await ff.deleteFile("music_in").catch(() => {});
   await ff.deleteFile("final.mp4").catch(() => {});
 
   onProgress({ stage: "complete", progress: 100, message: "Your video is ready!" });
 
-  return { blob, duration: expectedDuration, usedClips };
+  return { blob, duration: realDuration, usedClips };
 }

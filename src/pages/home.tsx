@@ -103,8 +103,9 @@ export default function Home() {
 
   async function resolveMusic(
     index: number,
-    expectedDur: number,
+    targetLen: number,
     onProgress: (p: ProgressUpdate) => void,
+    flags: { jamendoFellBack: boolean },
   ): Promise<{ music: { bytes: Uint8Array; loop: boolean; volume: number } | null; label: string }> {
     const vol = musicVolume;
 
@@ -137,7 +138,8 @@ export default function Home() {
         // Fall back to generated so the video still has audio.
         onProgress({ stage: "audio", progress: 3, message: "Jamendo unavailable — composing music…" });
         const seed = (Date.now() ^ (index * 2654435761)) >>> 0;
-        const { bytes, genreId } = await generateMusic("random", seed, expectedDur);
+        flags.jamendoFellBack = true;
+        const { bytes, genreId } = await generateMusic("random", seed, targetLen);
         return { music: { bytes, loop: false, volume: vol }, label: `${genLabel(genreId)} (generated)` };
       }
     }
@@ -145,11 +147,11 @@ export default function Home() {
     // Generated
     onProgress({ stage: "audio", progress: 3, message: "Composing background music…" });
     const seed = (Date.now() ^ (index * 2654435761) ^ (Math.floor(Math.random() * 1e9))) >>> 0;
-    const { bytes, genreId } = await generateMusic(genGenre, seed, expectedDur);
+    const { bytes, genreId } = await generateMusic(genGenre, seed, targetLen);
     return { music: { bytes, loop: false, volume: vol }, label: genLabel(genreId) };
   }
 
-  async function generateOne(index: number, total: number): Promise<VideoResult> {
+  async function generateOne(index: number, total: number, flags: { jamendoFellBack: boolean }): Promise<VideoResult> {
     const started = performance.now();
     const prefix = total > 1 ? `Video ${index + 1}/${total} — ` : "";
     const onProgress = (p: ProgressUpdate) => setProgress({ ...p, message: prefix + p.message });
@@ -167,15 +169,15 @@ export default function Home() {
     const page = nextQueryPage(query);
     const used = getUsedClipIds();
     const found = await searchVideos(query, getPexelsKey(), duration, page, fps, width, height);
-    const selected = selectClips(found, duration, perClipCap, used);
+    // Select extra footage (buffer) so failed downloads don't shorten the video.
+    const selected = selectClips(found, Math.ceil(duration * 1.7) + perClipCap, perClipCap, used);
     if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
 
-    const expectedDur = selected.reduce((s, c) => s + Math.min(c.duration, perClipCap), 0);
-
-    const { music, label: musicLabel } = await resolveMusic(index, expectedDur, onProgress);
+    const { music, label: musicLabel } = await resolveMusic(index, duration, onProgress, flags);
 
     const { blob, duration: outDur, usedClips } = await generateVideo({
-      clips: selected, width, height, crf: quality.crf, fps, perClipCap, music, onProgress,
+      clips: selected, width, height, crf: quality.crf, fps, perClipCap,
+      targetDuration: duration, music, onProgress,
     });
 
     addUsedClipIds(usedClips.map((c) => c.id));
@@ -208,12 +210,13 @@ export default function Home() {
 
     const total = count;
     const failures: string[] = [];
+    const flags = { jamendoFellBack: false };
     let made = 0;
     const batchStart = performance.now();
 
     for (let i = 0; i < total; i++) {
       try {
-        const r = await generateOne(i, total);
+        const r = await generateOne(i, total, flags);
         made++;
         setResults((prev) => [r, ...prev]);
       } catch (err) {
@@ -243,6 +246,13 @@ export default function Home() {
         : `Done ${timeStr}.`;
       toast({ title: `${made} video${made > 1 ? "s" : ""} ready`, description: desc });
       notify("Your videos are ready", `${made} video${made > 1 ? "s" : ""} in ${formatElapsed(totalMs)} — waiting for download.`);
+      if (flags.jamendoFellBack) {
+        toast({
+          title: "Jamendo unavailable",
+          description: "Couldn't fetch Jamendo tracks (check the client id in Settings, or CORS). Used generated music instead.",
+          variant: "destructive",
+        });
+      }
     }
   }
 

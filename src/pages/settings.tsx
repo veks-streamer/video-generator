@@ -187,7 +187,7 @@ export default function Settings() {
               Get a free client id at{" "}
               <a href="https://devportal.jamendo.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
                 devportal.jamendo.com <ExternalLink className="h-3 w-3" />
-              </a>. Tracks are Creative Commons — credit the artists when you publish.
+              </a>. Only commercially-usable licenses (CC-BY / CC-BY-SA) are selected — still credit the artists when you publish.
             </p>
           </CardContent>
         </Card>
