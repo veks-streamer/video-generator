@@ -60,7 +60,7 @@ export interface GenerateOptions {
   height: number;
   crf: number;
   perClipCap: number;
-  musicFile: File | null;
+  musicBytes: Uint8Array | null; // WAV/MP3 bytes (generated or uploaded)
   musicVolume: number; // 0..1
   onProgress: (p: ProgressUpdate) => void;
 }
@@ -79,7 +79,7 @@ async function fetchClip(url: string): Promise<Uint8Array> {
 }
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
-  const { clips, width, height, crf, perClipCap, musicFile, musicVolume, onProgress } = opts;
+  const { clips, width, height, crf, perClipCap, musicBytes, musicVolume, onProgress } = opts;
 
   onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
   const ff = await getFFmpeg();
@@ -173,9 +173,8 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
   let outputName = "stitched.mp4";
 
   // Optional background music: loop/trim to length with a short fade-out.
-  if (musicFile) {
+  if (musicBytes) {
     onProgress({ stage: "audio", progress: 92, message: "Mixing in background music…" });
-    const musicBytes = new Uint8Array(await musicFile.arrayBuffer());
     await ff.writeFile("music_in", musicBytes);
     const dur = Math.max(1, Math.round(expectedDuration));
     const fadeStart = Math.max(0, dur - 2);

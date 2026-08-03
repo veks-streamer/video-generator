@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { themes } from "@/lib/constants";
-import { Film, Search } from "lucide-react";
+import { themes, RANDOM_THEME_ID } from "@/lib/constants";
+import { Film, Search, Shuffle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -15,6 +15,14 @@ interface Props {
 export function ThemeSelector({ themeId, customQuery, onSelectTheme, onCustomQuery }: Props) {
   const [local, setLocal] = useState(customQuery);
 
+  const cardCls = (selected: boolean) =>
+    cn(
+      "flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all hover-elevate active-elevate-2",
+      selected ? "border-primary bg-primary/10" : "border-transparent bg-muted/50",
+    );
+
+  const randomSelected = themeId === RANDOM_THEME_ID && !customQuery;
+
   return (
     <div className="space-y-4">
       <Label className="text-sm font-medium uppercase tracking-wide flex items-center gap-2">
@@ -22,19 +30,22 @@ export function ThemeSelector({ themeId, customQuery, onSelectTheme, onCustomQue
       </Label>
 
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+        <button
+          type="button"
+          onClick={() => { setLocal(""); onSelectTheme(RANDOM_THEME_ID, ""); }}
+          className={cardCls(randomSelected)}
+        >
+          <Shuffle className={cn("h-6 w-6", randomSelected ? "text-primary" : "text-muted-foreground")} />
+          <span className={cn("text-xs font-medium", randomSelected ? "text-foreground" : "text-muted-foreground")}>
+            Random
+          </span>
+        </button>
+
         {themes.map((t) => {
           const Icon = t.icon;
           const selected = themeId === t.id && !customQuery;
           return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => { setLocal(""); onSelectTheme(t.id, t.query); }}
-              className={cn(
-                "flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all hover-elevate active-elevate-2",
-                selected ? "border-primary bg-primary/10" : "border-transparent bg-muted/50",
-              )}
-            >
+            <button key={t.id} type="button" onClick={() => { setLocal(""); onSelectTheme(t.id, t.query); }} className={cardCls(selected)}>
               <Icon className={cn("h-6 w-6", selected ? "text-primary" : "text-muted-foreground")} />
               <span className={cn("text-xs font-medium", selected ? "text-foreground" : "text-muted-foreground")}>
                 {t.label}
@@ -57,6 +68,10 @@ export function ThemeSelector({ themeId, customQuery, onSelectTheme, onCustomQue
           onChange={(e) => { setLocal(e.target.value); onCustomQuery(e.target.value); }}
         />
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        “Random” picks a theme for you — in a batch it varies per video.
+      </p>
     </div>
   );
 }
