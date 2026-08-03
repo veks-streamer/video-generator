@@ -12,20 +12,23 @@ import { OptionSelector } from "@/components/option-selector";
 import { MusicSelector } from "@/components/music-selector";
 import { ProgressPanel } from "@/components/progress-panel";
 import { ResultsGallery } from "@/components/results-gallery";
-import { Play, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge, Layers } from "lucide-react";
+import { Play, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge, Layers, Film } from "lucide-react";
 import {
-  aspectRatios, qualities, themes, randomTheme, RANDOM_THEME_ID,
-  musicMoods, MUSIC_NONE, MUSIC_UPLOAD,
+  aspectRatios, qualities, framerates, themes, randomTheme, RANDOM_THEME_ID,
+  generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_GENERATED, MUSIC_JAMENDO,
+  MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
 import type { ProgressUpdate, VideoResult, Theme } from "@/lib/constants";
-import { hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage } from "@/lib/storage";
+import {
+  hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage,
+  getJamendoKey, hasJamendoKey, getUsedTrackIds, addUsedTrackIds,
+} from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
 import { generateVideo, getRecentFfmpegLog } from "@/lib/video-generator";
-import { generateMusicLoop } from "@/lib/music";
+import { generateMusic } from "@/lib/music";
+import { searchJamendo, downloadAudio } from "@/lib/jamendo";
 
-function even(n: number): number {
-  return Math.max(2, Math.round(n / 2) * 2);
-}
+const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 const batchCounts = [
   { id: "1", label: "1 video", icon: Video },
@@ -35,23 +38,35 @@ const batchCounts = [
   { id: "20", label: "20 videos", icon: Layers },
 ];
 
-function moodLabel(id: string): string {
-  return musicMoods.find((m) => m.id === id)?.label ?? id.charAt(0).toUpperCase() + id.slice(1);
+function genLabel(id: string) {
+  return generativeGenres.find((g) => g.id === id)?.label ?? id;
+}
+function notify(title: string, body: string) {
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  } catch { /* */ }
 }
 
 export default function Home() {
   const { toast } = useToast();
   const [keyReady, setKeyReady] = useState(hasPexelsKey());
+  const [jamReady, setJamReady] = useState(hasJamendoKey());
 
   const [themeId, setThemeId] = useState<string | null>("nature");
   const [customQuery, setCustomQuery] = useState("");
   const [aspectId, setAspectId] = useState("landscape");
   const [qualityId, setQualityId] = useState("balanced");
+  const [fpsId, setFpsId] = useState("30");
   const [duration, setDuration] = useState(30);
   const [batch, setBatch] = useState("1");
-  const [musicId, setMusicId] = useState("ambient");
+
+  const [musicSource, setMusicSource] = useState(MUSIC_GENERATED);
+  const [genGenre, setGenGenre] = useState("uplifting");
+  const [jamGenre, setJamGenre] = useState("electronic");
   const [musicFile, setMusicFile] = useState<File | null>(null);
-  const [musicVolume, setMusicVolume] = useState(0.7);
+  const [musicVolume, setMusicVolume] = useState(0.8);
 
   const [showOverlay, setShowOverlay] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -60,73 +75,106 @@ export default function Home() {
   const [results, setResults] = useState<VideoResult[]>([]);
 
   useEffect(() => {
-    const onFocus = () => setKeyReady(hasPexelsKey());
+    const onFocus = () => { setKeyReady(hasPexelsKey()); setJamReady(hasJamendoKey()); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
+
+  // Warn before leaving while a generation is running.
+  useEffect(() => {
+    if (!isProcessing) return;
+    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [isProcessing]);
 
   const isRandomTheme = themeId === RANDOM_THEME_ID && !customQuery.trim();
   const hasTheme = customQuery.trim().length > 0 || !!themeId;
   const canGenerate = keyReady && hasTheme && !isProcessing;
   const count = parseInt(batch, 10) || 1;
-  const isHeavy = duration > 180 || qualityId === "hd" || count >= 10;
+  const isHeavy = duration > 180 || qualityId === "hd" || fpsId === "60" || count >= 10;
 
   function pickTheme(): { query: string; label: string } {
     if (customQuery.trim()) return { query: customQuery.trim(), label: customQuery.trim() };
-    if (isRandomTheme) {
-      const t = randomTheme();
-      return { query: t.query, label: t.label };
-    }
+    if (isRandomTheme) { const t = randomTheme(); return { query: t.query, label: t.label }; }
     const t = themes.find((x) => x.id === themeId) as Theme;
     return { query: t.query, label: t.label };
   }
 
+  async function resolveMusic(
+    index: number,
+    expectedDur: number,
+    onProgress: (p: ProgressUpdate) => void,
+  ): Promise<{ music: { bytes: Uint8Array; loop: boolean; volume: number } | null; label: string }> {
+    const vol = musicVolume;
+
+    if (musicSource === MUSIC_NONE) return { music: null, label: "No music" };
+
+    if (musicSource === MUSIC_UPLOAD) {
+      if (!musicFile) return { music: null, label: "No music" };
+      const bytes = new Uint8Array(await musicFile.arrayBuffer());
+      return { music: { bytes, loop: true, volume: vol }, label: musicFile.name };
+    }
+
+    if (musicSource === MUSIC_JAMENDO && hasJamendoKey()) {
+      try {
+        onProgress({ stage: "audio", progress: 3, message: "Finding a Jamendo track…" });
+        let genre = jamGenre;
+        if (genre === MUSIC_RANDOM) {
+          const pool = jamendoGenres.filter((g) => g.id !== MUSIC_RANDOM);
+          genre = pool[Math.floor(Math.random() * pool.length)].id;
+        }
+        const used = getUsedTrackIds();
+        const tracks = await searchJamendo(getJamendoKey(), genre, 60);
+        const fresh = tracks.filter((t) => !used.has(t.id));
+        const chosen = (fresh.length ? fresh : tracks).sort(() => Math.random() - 0.5)[0];
+        if (!chosen) throw new Error("No Jamendo tracks found for this genre.");
+        onProgress({ stage: "audio", progress: 4, message: `Downloading “${chosen.name}”…` });
+        const bytes = await downloadAudio(chosen.audio);
+        addUsedTrackIds([chosen.id]);
+        return { music: { bytes, loop: true, volume: vol }, label: `${chosen.name} — ${chosen.artist}` };
+      } catch (e) {
+        // Fall back to generated so the video still has audio.
+        onProgress({ stage: "audio", progress: 3, message: "Jamendo unavailable — composing music…" });
+        const seed = (Date.now() ^ (index * 2654435761)) >>> 0;
+        const { bytes, genreId } = await generateMusic("random", seed, expectedDur);
+        return { music: { bytes, loop: false, volume: vol }, label: `${genLabel(genreId)} (generated)` };
+      }
+    }
+
+    // Generated
+    onProgress({ stage: "audio", progress: 3, message: "Composing background music…" });
+    const seed = (Date.now() ^ (index * 2654435761) ^ (Math.floor(Math.random() * 1e9))) >>> 0;
+    const { bytes, genreId } = await generateMusic(genGenre, seed, expectedDur);
+    return { music: { bytes, loop: false, volume: vol }, label: genLabel(genreId) };
+  }
+
   async function generateOne(index: number, total: number): Promise<VideoResult> {
     const prefix = total > 1 ? `Video ${index + 1}/${total} — ` : "";
-    const onProgress = (p: ProgressUpdate) =>
-      setProgress({ ...p, message: prefix + p.message });
+    const onProgress = (p: ProgressUpdate) => setProgress({ ...p, message: prefix + p.message });
 
     const aspect = aspectRatios.find((a) => a.id === aspectId)!;
     const quality = qualities.find((q) => q.id === qualityId)!;
+    const fps = framerates.find((f) => f.id === fpsId)!.fps;
     const width = even(aspect.width * quality.scale);
     const height = even(aspect.height * quality.scale);
     const perClipCap = duration > 180 ? 12 : 6;
 
     const { query, label } = pickTheme();
 
-    onProgress({ stage: "searching", progress: 2, message: `Searching Pexels for “${label}”…` });
+    onProgress({ stage: "searching", progress: 2, message: `Searching “${label}” (${fps}fps)…` });
     const page = nextQueryPage(query);
     const used = getUsedClipIds();
-    const found = await searchVideos(query, getPexelsKey(), duration, page);
+    const found = await searchVideos(query, getPexelsKey(), duration, page, fps, width);
     const selected = selectClips(found, duration, perClipCap, used);
     if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
 
     const expectedDur = selected.reduce((s, c) => s + Math.min(c.duration, perClipCap), 0);
 
-    // Background music
-    let musicBytes: Uint8Array | null = null;
-    let musicLabelText = "No music";
-    if (musicId === MUSIC_UPLOAD && musicFile) {
-      onProgress({ stage: "audio", progress: 3, message: "Preparing your track…" });
-      musicBytes = new Uint8Array(await musicFile.arrayBuffer());
-      musicLabelText = musicFile.name;
-    } else if (musicId !== MUSIC_NONE && musicId !== MUSIC_UPLOAD) {
-      onProgress({ stage: "audio", progress: 3, message: "Composing background music…" });
-      const seed = (Date.now() ^ (index * 2654435761)) >>> 0;
-      const { bytes, moodId } = await generateMusicLoop(musicId, seed, 40);
-      musicBytes = bytes;
-      musicLabelText = moodLabel(moodId);
-    }
+    const { music, label: musicLabel } = await resolveMusic(index, expectedDur, onProgress);
 
     const { blob, duration: outDur, usedClips } = await generateVideo({
-      clips: selected,
-      width,
-      height,
-      crf: quality.crf,
-      perClipCap,
-      musicBytes,
-      musicVolume,
-      onProgress,
+      clips: selected, width, height, crf: quality.crf, fps, perClipCap, music, onProgress,
     });
 
     addUsedClipIds(usedClips.map((c) => c.id));
@@ -138,14 +186,20 @@ export default function Home() {
       duration: outDur,
       clips: usedClips,
       themeLabel: label,
-      aspectLabel: aspect.label,
-      musicLabel: musicLabelText,
+      aspectLabel: `${aspect.label} · ${fps}fps`,
+      musicLabel,
       createdAt: new Date().toISOString(),
     };
   }
 
   async function handleGenerate() {
     if (!canGenerate) return;
+    try {
+      if ("Notification" in window && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+    } catch { /* */ }
+
     setErrorDetails("");
     setShowOverlay(true);
     setIsProcessing(true);
@@ -173,12 +227,12 @@ export default function Home() {
       setProgress({ stage: "error", progress: 0, message: failures[0] ?? "Generation failed." });
       setErrorDetails((failures.join("\n") + (log ? `\n\n— ffmpeg log —\n${log}` : "")).trim());
       toast({ title: "Generation failed", description: failures[0] ?? "See details.", variant: "destructive" });
+      notify("Video Generator", "Generation failed — open the tab for details.");
     } else {
       setShowOverlay(false);
-      toast({
-        title: `Done — ${made} video${made > 1 ? "s" : ""} ready`,
-        description: failures.length ? `${failures.length} failed; the rest are below.` : "Find them on the right.",
-      });
+      const desc = failures.length ? `${failures.length} failed; the rest are below.` : "Ready to download.";
+      toast({ title: `Done — ${made} video${made > 1 ? "s" : ""} ready`, description: desc });
+      notify("Your videos are ready", `${made} video${made > 1 ? "s" : ""} generated and waiting for download.`);
     }
   }
 
@@ -186,18 +240,11 @@ export default function Home() {
     const a = document.createElement("a");
     a.href = r.url;
     a.download = `video-${r.themeLabel.replace(/\s+/g, "-").toLowerCase()}-${r.id}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    document.body.appendChild(a); a.click(); a.remove();
   }
-
   async function downloadAll() {
-    for (const r of results) {
-      downloadResult(r);
-      await new Promise((res) => setTimeout(res, 600));
-    }
+    for (const r of results) { downloadResult(r); await new Promise((res) => setTimeout(res, 600)); }
   }
-
   function clearResults() {
     results.forEach((r) => URL.revokeObjectURL(r.url));
     setResults([]);
@@ -208,20 +255,14 @@ export default function Home() {
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4 px-4 mx-auto max-w-7xl">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Video className="h-5 w-5 text-primary" />
-            </div>
+            <div className="p-2 rounded-lg bg-primary/10"><Video className="h-5 w-5 text-primary" /></div>
             <div className="leading-tight">
               <h1 className="text-lg font-semibold">Video Generator</h1>
               <p className="text-[11px] text-muted-foreground -mt-0.5">runs entirely in your browser</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/settings">
-              <Button variant="ghost" size="icon" aria-label="Settings">
-                <Settings className="h-5 w-5" />
-              </Button>
-            </Link>
+            <Link href="/settings"><Button variant="ghost" size="icon" aria-label="Settings"><Settings className="h-5 w-5" /></Button></Link>
             <ThemeToggle />
           </div>
         </div>
@@ -234,9 +275,7 @@ export default function Home() {
             <AlertTitle>Add your Pexels API key</AlertTitle>
             <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
               <span>A free Pexels API key is needed to fetch clips. It's stored only in your browser.</span>
-              <Link href="/settings">
-                <Button variant="outline" size="sm">Open Settings</Button>
-              </Link>
+              <Link href="/settings"><Button variant="outline" size="sm">Open Settings</Button></Link>
             </AlertDescription>
           </Alert>
         )}
@@ -249,7 +288,7 @@ export default function Home() {
                   <Sparkles className="h-6 w-6 text-primary" /> Create your video{count > 1 ? "s" : ""}
                 </CardTitle>
                 <p className="text-muted-foreground text-sm">
-                  Clips are fetched from Pexels and stitched together locally with ffmpeg.wasm. Batch mode makes several unique videos in a row.
+                  Clips are fetched from Pexels and stitched locally with ffmpeg.wasm. Batch mode makes several unique videos in a row.
                 </p>
               </CardHeader>
               <CardContent className="space-y-8">
@@ -260,37 +299,26 @@ export default function Home() {
                   onCustomQuery={setCustomQuery}
                 />
                 <Separator />
-                <OptionSelector
-                  label="How many videos"
-                  labelIcon={Layers}
-                  items={batchCounts}
-                  value={batch}
-                  onChange={setBatch}
-                />
+                <OptionSelector label="How many videos" labelIcon={Layers} items={batchCounts} value={batch} onChange={setBatch} />
                 <Separator />
-                <OptionSelector
-                  label="Aspect ratio"
-                  labelIcon={Ratio}
-                  items={aspectRatios}
-                  value={aspectId}
-                  onChange={setAspectId}
-                />
+                <OptionSelector label="Aspect ratio" labelIcon={Ratio} items={aspectRatios} value={aspectId} onChange={setAspectId} />
                 <Separator />
-                <OptionSelector
-                  label="Quality"
-                  labelIcon={Gauge}
-                  items={qualities.map((q) => ({ id: q.id, label: q.label, icon: Gauge }))}
-                  value={qualityId}
-                  onChange={setQualityId}
-                />
+                <OptionSelector label="Quality" labelIcon={Gauge} items={qualities.map((q) => ({ id: q.id, label: q.label, icon: Gauge }))} value={qualityId} onChange={setQualityId} />
+                <Separator />
+                <OptionSelector label="Framerate" labelIcon={Film} items={framerates} value={fpsId} onChange={setFpsId} />
                 <Separator />
                 <DurationSlider value={duration} onChange={setDuration} min={10} max={600} step={5} />
                 <Separator />
                 <MusicSelector
-                  musicId={musicId}
+                  source={musicSource}
+                  genGenre={genGenre}
+                  jamGenre={jamGenre}
+                  jamendoReady={jamReady}
                   file={musicFile}
                   volume={musicVolume}
-                  onMusicId={setMusicId}
+                  onSource={setMusicSource}
+                  onGenGenre={setGenGenre}
+                  onJamGenre={setJamGenre}
                   onFile={setMusicFile}
                   onVolume={setMusicVolume}
                 />
@@ -298,7 +326,7 @@ export default function Home() {
                 {isHeavy && (
                   <p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    Big batches, long durations or 1080p take a while to encode in the browser and use a lot of memory. Use a desktop browser and keep the tab open.
+                    Big batches, long durations, 60fps or 1080p take a while to encode in the browser and use a lot of memory. You can switch tabs — you'll get a notification when it's done. Don't close the tab.
                   </p>
                 )}
 
@@ -310,25 +338,13 @@ export default function Home() {
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Video className="h-5 w-5" /> Results
-            </h2>
-            <ResultsGallery
-              results={results}
-              onDownload={downloadResult}
-              onDownloadAll={downloadAll}
-              onClear={clearResults}
-            />
+            <h2 className="text-xl font-semibold flex items-center gap-2"><Video className="h-5 w-5" /> Results</h2>
+            <ResultsGallery results={results} onDownload={downloadResult} onDownloadAll={downloadAll} onClear={clearResults} />
           </div>
         </div>
       </main>
 
-      <ProgressPanel
-        progress={progress}
-        visible={showOverlay}
-        details={errorDetails}
-        onClose={() => setShowOverlay(false)}
-      />
+      <ProgressPanel progress={progress} visible={showOverlay} details={errorDetails} onClose={() => setShowOverlay(false)} />
     </div>
   );
 }

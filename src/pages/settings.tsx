@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save } from "lucide-react";
-import { getPexelsKey, setPexelsKey } from "@/lib/storage";
+import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio } from "lucide-react";
+import { getPexelsKey, setPexelsKey, getJamendoKey, setJamendoKey } from "@/lib/storage";
 import { searchVideos } from "@/lib/pexels";
+import { searchJamendo } from "@/lib/jamendo";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -18,6 +19,34 @@ export default function Settings() {
   const [status, setStatus] = useState<"unknown" | "ok" | "bad">(
     getPexelsKey() ? "unknown" : "bad",
   );
+
+  const [jamKey, setJamKey] = useState(getJamendoKey());
+  const [jamTesting, setJamTesting] = useState(false);
+  const [jamStatus, setJamStatus] = useState<"unknown" | "ok" | "bad">(
+    getJamendoKey() ? "unknown" : "bad",
+  );
+
+  function saveJam() {
+    setJamendoKey(jamKey);
+    setJamStatus(jamKey ? "unknown" : "bad");
+    toast({ title: "Saved", description: "Your Jamendo client id is stored in this browser." });
+  }
+  async function testJam() {
+    if (!jamKey.trim()) return;
+    setJamTesting(true);
+    try {
+      setJamendoKey(jamKey);
+      const tracks = await searchJamendo(jamKey.trim(), "electronic", 1);
+      if (tracks.length === 0) throw new Error("No tracks returned (client id may be invalid).");
+      setJamStatus("ok");
+      toast({ title: "Jamendo works", description: "Client id accepted." });
+    } catch (e) {
+      setJamStatus("bad");
+      toast({ title: "Jamendo test failed", description: e instanceof Error ? e.message : "Could not reach Jamendo.", variant: "destructive" });
+    } finally {
+      setJamTesting(false);
+    }
+  }
 
   function save() {
     setPexelsKey(key);
@@ -112,6 +141,53 @@ export default function Settings() {
               >
                 pexels.com/api <ExternalLink className="h-3 w-3" />
               </a>
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="h-5 w-5" /> Jamendo client id
+              {jamStatus === "ok" && (
+                <Badge className="bg-green-600 dark:bg-green-700 ml-1">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> Working
+                </Badge>
+              )}
+              {jamStatus === "bad" && (
+                <Badge variant="secondary" className="ml-1">
+                  <XCircle className="h-3 w-3 mr-1" /> Not set
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Optional. Enables real royalty-free (Creative Commons) instrumental music by genre, downloaded
+              in your browser and cut to the video length. Without it, the built-in generated music is used.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="jamendo">Client id</Label>
+              <Input
+                id="jamendo"
+                type="password"
+                placeholder="Paste your Jamendo client id"
+                value={jamKey}
+                onChange={(e) => setJamKey(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={saveJam}><Save className="h-4 w-4 mr-2" /> Save</Button>
+              <Button variant="outline" onClick={testJam} disabled={!jamKey.trim() || jamTesting}>
+                {jamTesting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Test id
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Get a free client id at{" "}
+              <a href="https://devportal.jamendo.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                devportal.jamendo.com <ExternalLink className="h-3 w-3" />
+              </a>. Tracks are Creative Commons — credit the artists when you publish.
             </p>
           </CardContent>
         </Card>

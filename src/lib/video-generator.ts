@@ -59,9 +59,9 @@ export interface GenerateOptions {
   width: number;
   height: number;
   crf: number;
+  fps: number;
   perClipCap: number;
-  musicBytes: Uint8Array | null; // WAV/MP3 bytes (generated or uploaded)
-  musicVolume: number; // 0..1
+  music: { bytes: Uint8Array; loop: boolean; volume: number } | null;
   onProgress: (p: ProgressUpdate) => void;
 }
 
@@ -79,7 +79,7 @@ async function fetchClip(url: string): Promise<Uint8Array> {
 }
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
-  const { clips, width, height, crf, perClipCap, musicBytes, musicVolume, onProgress } = opts;
+  const { clips, width, height, crf, fps, perClipCap, music, onProgress } = opts;
 
   onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
   const ff = await getFFmpeg();
@@ -130,11 +130,14 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
         "-i", src,
         "-t", String(perClipCap),
         "-vf",
-        `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1,fps=30,format=yuv420p`,
+        `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,` +
+          `crop=${width}:${height},setsar=1,fps=${fps},format=yuv420p`,
         "-an",
+        "-r", String(fps),
         "-c:v", "libx264",
-        "-preset", "ultrafast",
+        "-preset", "veryfast",
         "-crf", String(crf),
+        "-pix_fmt", "yuv420p",
         "-y", out,
       ]);
       normalized.push(out);
@@ -172,23 +175,31 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
 
   let outputName = "stitched.mp4";
 
-  // Optional background music: loop/trim to length with a short fade-out.
-  if (musicBytes) {
+  // Optional background music, mixed at the exact video length with a fade-out.
+  if (music) {
     onProgress({ stage: "audio", progress: 92, message: "Mixing in background music…" });
-    await ff.writeFile("music_in", musicBytes);
+    await ff.writeFile("music_in", music.bytes);
     const dur = Math.max(1, Math.round(expectedDuration));
     const fadeStart = Math.max(0, dur - 2);
-    const vol = Math.max(0, Math.min(1, musicVolume));
+    const vol = Math.max(0, Math.min(2, music.volume));
+    const af = `volume=${vol},afade=t=out:st=${fadeStart}:d=2`;
     try {
-      await ff.exec([
-        "-i", "stitched.mp4",
-        "-i", "music_in",
-        "-filter_complex",
-        `[1:a]aloop=loop=-1:size=2e+09,atrim=0:${dur},volume=${vol},afade=t=out:st=${fadeStart}:d=2[a]`,
-        "-map", "0:v", "-map", "[a]",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-        "-t", String(dur), "-movflags", "+faststart", "-y", "final.mp4",
-      ]);
+      const args = music.loop
+        ? [
+            "-i", "stitched.mp4",
+            "-stream_loop", "-1", "-i", "music_in",
+            "-map", "0:v", "-map", "1:a",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-af", af, "-t", String(dur), "-movflags", "+faststart", "-y", "final.mp4",
+          ]
+        : [
+            "-i", "stitched.mp4",
+            "-i", "music_in",
+            "-map", "0:v", "-map", "1:a",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-af", af, "-t", String(dur), "-movflags", "+faststart", "-y", "final.mp4",
+          ];
+      await ff.exec(args);
       outputName = "final.mp4";
     } catch (e) {
       pushLog(`music mix failed, exporting silent cut: ${e instanceof Error ? e.message : String(e)}`);

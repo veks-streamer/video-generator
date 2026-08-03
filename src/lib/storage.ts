@@ -69,3 +69,33 @@ export function nextQueryPage(query: string): number {
     return 1 + Math.floor(Math.random() * 3);
   }
 }
+
+// ---- Jamendo (optional real-music source) ----
+const JAMENDO_KEY = "vg.jamendoClientId";
+const USED_TRACKS_KEY = "vg.usedTrackIds";
+
+export function getJamendoKey(): string {
+  try { return localStorage.getItem(JAMENDO_KEY) ?? ""; } catch { return ""; }
+}
+export function setJamendoKey(key: string): void {
+  try { if (key) localStorage.setItem(JAMENDO_KEY, key.trim()); else localStorage.removeItem(JAMENDO_KEY); } catch { /* */ }
+}
+export function hasJamendoKey(): boolean {
+  return getJamendoKey().length > 0;
+}
+
+export function getUsedTrackIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(USED_TRACKS_KEY);
+    return new Set<string>(raw ? JSON.parse(raw) : []);
+  } catch { return new Set<string>(); }
+}
+export function addUsedTrackIds(ids: string[]): void {
+  try {
+    const cur = getUsedTrackIds();
+    for (const id of ids) cur.add(id);
+    let arr = Array.from(cur);
+    if (arr.length > 300) arr = arr.slice(arr.length - 300);
+    localStorage.setItem(USED_TRACKS_KEY, JSON.stringify(arr));
+  } catch { /* */ }
+}

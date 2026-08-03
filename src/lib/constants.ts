@@ -5,7 +5,7 @@ import {
   Rocket, Flower2, Coffee, Camera, Palette, Car, Fish, Bird, Moon, Sun,
   Leaf, Tractor, Bike, Tent, Landmark, Wind, Flame, Gem, Globe, Baby,
   RectangleHorizontal, RectangleVertical, Square, Shuffle, Music, Music2,
-  Radio, Piano, Waves as WavesIcon,
+  Radio, Piano, Waves as WavesIcon, Zap, Activity, Guitar, Film,
 } from "lucide-react";
 
 /** Preset themes. `query` is what we send to the Pexels search API. All SFW. */
@@ -92,28 +92,63 @@ export const qualities: Quality[] = [
   { id: "hd", label: "Full HD (1080p)", scale: 1.5, crf: 23 },
 ];
 
-// ---- Background music (generated in-browser) ----
-export interface MusicMood {
+export interface Framerate {
+  id: string;
+  label: string;
+  fps: number;
+  icon: LucideIcon;
+}
+
+export const framerates: Framerate[] = [
+  { id: "24", label: "24 fps", fps: 24, icon: Film },
+  { id: "30", label: "30 fps", fps: 30, icon: Film },
+  { id: "60", label: "60 fps", fps: 60, icon: Film },
+];
+
+// ---- Background music ----
+export interface MusicGenre {
   id: string;
   label: string;
   icon: LucideIcon;
 }
 
+// Music sources
 export const MUSIC_NONE = "none";
+export const MUSIC_GENERATED = "generated";
+export const MUSIC_JAMENDO = "jamendo";
 export const MUSIC_UPLOAD = "upload";
 export const MUSIC_RANDOM = "random";
 
-/** Selectable moods (the actual synthesis presets live in music.ts). */
-export const musicMoods: MusicMood[] = [
+/** In-browser synthesized genres (presets live in music.ts). */
+export const generativeGenres: MusicGenre[] = [
   { id: "ambient", label: "Ambient", icon: WavesIcon },
   { id: "calm", label: "Calm", icon: Music },
   { id: "uplifting", label: "Uplifting", icon: Sun },
   { id: "cinematic", label: "Cinematic", icon: Radio },
   { id: "lofi", label: "Lo-fi", icon: Music2 },
+  { id: "electronic", label: "Electronic", icon: Zap },
+  { id: "techno", label: "Techno", icon: Activity },
+  { id: "pop", label: "Pop", icon: Sparkles },
+  { id: "rock", label: "Rock", icon: Guitar },
+  { id: "classical", label: "Classical", icon: Piano },
   { id: "deep", label: "Deep", icon: Piano },
+  { id: MUSIC_RANDOM, label: "Random", icon: Shuffle },
 ];
 
-export const generativeMoodIds = musicMoods.map((m) => m.id);
+/** Jamendo tags (real royalty-free tracks, requires a free client id). */
+export const jamendoGenres: MusicGenre[] = [
+  { id: "electronic", label: "Electronic", icon: Zap },
+  { id: "techno", label: "Techno", icon: Activity },
+  { id: "house", label: "House", icon: Activity },
+  { id: "rock", label: "Rock", icon: Guitar },
+  { id: "pop", label: "Pop", icon: Sparkles },
+  { id: "classical", label: "Classical", icon: Piano },
+  { id: "jazz", label: "Jazz", icon: Music2 },
+  { id: "ambient", label: "Ambient", icon: WavesIcon },
+  { id: "hiphop", label: "Hip-hop", icon: Radio },
+  { id: "cinematic", label: "Cinematic", icon: Radio },
+  { id: MUSIC_RANDOM, label: "Random", icon: Shuffle },
+];
 
 export type ProgressStage =
   | "loading" | "searching" | "downloading" | "encoding"
@@ -132,6 +167,8 @@ export interface VideoClip {
   duration: number;
   width: number;
   height: number;
+  fps: number;        // fps of the chosen file
+  nativeFps: boolean; // true if the file already matches the requested fps
   url: string;
   thumbnail: string;
   videographer: string;
