@@ -36,14 +36,14 @@ interface Cfg {
 const GENRES: Record<string, Cfg> = {
   ambient:   { scale: SCALES.minor,  root: 48, bpm: [60, 72],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "sine", density: 0.25, octave: 1, gain: 0.3 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1300, swing: 0, progs: [[0,5,3,4],[0,3,4,3],[0,4,5,3],[5,3,4,0]] },
   calm:      { scale: SCALES.penta,  root: 50, bpm: [72, 88],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "triangle", density: 0.45, octave: 1, gain: 0.42 }, pad: { type: "sine", gain: 0.45 }, cutoff: 2000, swing: 0.1, progs: [[0,3,1,4],[0,4,3,1],[0,2,4,3],[3,4,0,2]] },
-  uplifting: { scale: SCALES.major,  root: 52, bpm: [104, 124],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.7, octave: 1, gain: 0.5 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 3000, swing: 0, progs: [[0,4,5,3],[0,5,3,4],[3,4,0,5],[0,3,4,5],[5,4,0,3]] },
+  uplifting: { scale: SCALES.major,  root: 52, bpm: [104, 124],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.7, octave: 1, gain: 0.5 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2500, swing: 0, progs: [[0,4,5,3],[0,5,3,4],[3,4,0,5],[0,3,4,5],[5,4,0,3]] },
   cinematic: { scale: SCALES.minor,  root: 45, bpm: [72, 96],  drums: "ambient",  bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: { type: "triangle", density: 0.35, octave: 1, gain: 0.35 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1600, swing: 0, progs: [[0,5,3,4],[0,3,5,4],[0,6,5,4],[5,3,0,4]] },
   lofi:      { scale: SCALES.dorian, root: 48, bpm: [72, 88],  drums: "backbeat", bass: { type: "triangle", pattern: "offbeat", gain: 0.5 }, lead: { type: "sine", density: 0.5, octave: 1, gain: 0.38 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 1300, swing: 0.28, progs: [[0,3,4,1],[0,4,3,5],[1,4,0,3],[0,3,1,4]] },
-  electronic:{ scale: SCALES.minor,  root: 48, bpm: [118, 128],drums: "four",     bass: { type: "sawtooth", pattern: "offbeat", gain: 0.5 }, lead: { type: "sawtooth", density: 0.7, octave: 1, gain: 0.4 }, pad: { type: "sawtooth", gain: 0.24 }, cutoff: 2800, swing: 0, progs: [[0,0,5,3],[0,3,4,4],[0,5,3,0],[0,0,3,5]] },
-  techno:    { scale: SCALES.minor,  root: 45, bpm: [126, 134],drums: "four",     bass: { type: "sawtooth", pattern: "root", gain: 0.55 }, lead: { type: "square", density: 0.55, octave: 1, gain: 0.32 }, pad: null, cutoff: 2400, swing: 0, progs: [[0,0,0,3],[0,0,5,5],[0,0,0,0],[0,3,0,5]] },
-  pop:       { scale: SCALES.major,  root: 50, bpm: [100, 118],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.72, octave: 1, gain: 0.48 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2900, swing: 0, progs: [[0,4,5,3],[5,3,0,4],[0,3,4,5],[4,5,3,0]] },
-  rock:      { scale: SCALES.minor,  root: 40, bpm: [120, 142],drums: "rock",     bass: { type: "square", pattern: "eighths", gain: 0.5 }, lead: { type: "square", density: 0.5, octave: 1, gain: 0.3 }, pad: { type: "square", gain: 0.22 }, cutoff: 2100, swing: 0, progs: [[0,0,3,4],[0,5,3,4],[0,3,4,0],[0,4,3,5]] },
-  classical: { scale: SCALES.major,  root: 52, bpm: [82, 104], drums: "none",     bass: { type: "triangle", pattern: "root", gain: 0.45 }, lead: { type: "triangle", density: 0.9, octave: 1, gain: 0.42 }, pad: { type: "triangle", gain: 0.35 }, cutoff: 2600, swing: 0, progs: [[0,4,5,3],[0,3,4,5],[0,5,3,4],[3,0,4,5]] },
+  electronic:{ scale: SCALES.minor,  root: 48, bpm: [118, 128],drums: "four",     bass: { type: "sawtooth", pattern: "offbeat", gain: 0.5 }, lead: { type: "sawtooth", density: 0.7, octave: 1, gain: 0.4 }, pad: { type: "sawtooth", gain: 0.24 }, cutoff: 2300, swing: 0, progs: [[0,0,5,3],[0,3,4,4],[0,5,3,0],[0,0,3,5]] },
+  techno:    { scale: SCALES.minor,  root: 45, bpm: [126, 134],drums: "four",     bass: { type: "sawtooth", pattern: "root", gain: 0.55 }, lead: { type: "square", density: 0.55, octave: 1, gain: 0.32 }, pad: null, cutoff: 2000, swing: 0, progs: [[0,0,0,3],[0,0,5,5],[0,0,0,0],[0,3,0,5]] },
+  pop:       { scale: SCALES.major,  root: 50, bpm: [100, 118],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.72, octave: 1, gain: 0.48 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2400, swing: 0, progs: [[0,4,5,3],[5,3,0,4],[0,3,4,5],[4,5,3,0]] },
+  rock:      { scale: SCALES.minor,  root: 40, bpm: [120, 142],drums: "rock",     bass: { type: "square", pattern: "eighths", gain: 0.5 }, lead: { type: "square", density: 0.5, octave: 1, gain: 0.3 }, pad: { type: "square", gain: 0.22 }, cutoff: 1850, swing: 0, progs: [[0,0,3,4],[0,5,3,4],[0,3,4,0],[0,4,3,5]] },
+  classical: { scale: SCALES.major,  root: 52, bpm: [82, 104], drums: "none",     bass: { type: "triangle", pattern: "root", gain: 0.45 }, lead: { type: "triangle", density: 0.9, octave: 1, gain: 0.42 }, pad: { type: "triangle", gain: 0.35 }, cutoff: 2200, swing: 0, progs: [[0,4,5,3],[0,3,4,5],[0,5,3,4],[3,0,4,5]] },
   deep:      { scale: SCALES.minor,  root: 38, bpm: [60, 74],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: { type: "sine", density: 0.2, octave: 1, gain: 0.28 }, pad: { type: "sine", gain: 0.5 }, cutoff: 900, swing: 0, progs: [[0,0,3,4],[0,3,0,5],[0,5,3,0]] },
 };
 
@@ -92,6 +92,16 @@ function softLimit(buffer: AudioBuffer, targetRms = 0.17) {
   }
 }
 
+function makeIR(ctx: BaseAudioContext, seconds: number, decay: number): AudioBuffer {
+  const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return ir;
+}
+
 export async function generateMusic(
   genreId: string, seed: number, seconds: number,
 ): Promise<{ bytes: Uint8Array; genreId: string }> {
@@ -105,14 +115,24 @@ export async function generateMusic(
     (window as any).OfflineAudioContext || (window as any).webkitOfflineAudioContext;
   const ctx = new OAC(2, Math.ceil(dur * sr), sr);
 
-  const master = ctx.createGain(); master.gain.value = 0.6;
+  // Master chain: bus -> gentle low-pass + high-shelf cut (tames harsh/8-bit
+  // highs) -> compressor -> out.
+  const master = ctx.createGain(); master.gain.value = 0.5;
+  const toneLp = ctx.createBiquadFilter(); toneLp.type = "lowpass"; toneLp.frequency.value = 8500; toneLp.Q.value = 0.5;
+  const hshelf = ctx.createBiquadFilter(); hshelf.type = "highshelf"; hshelf.frequency.value = 4500; hshelf.gain.value = -5;
   const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -18; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
-  master.connect(comp); comp.connect(ctx.destination);
+  comp.threshold.value = -16; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.28;
+  master.connect(toneLp); toneLp.connect(hshelf); hshelf.connect(comp); comp.connect(ctx.destination);
 
+  // Convolution reverb send for space & warmth.
+  const reverb = ctx.createConvolver(); reverb.buffer = makeIR(ctx, 2.2, 3.2);
+  const revReturn = ctx.createGain(); revReturn.gain.value = 0.9;
+  reverb.connect(revReturn); revReturn.connect(master);
+
+  // Subtle tempo echo.
   const delay = ctx.createDelay(1.5);
-  const fb = ctx.createGain(); fb.gain.value = 0.2;
-  const wet = ctx.createGain(); wet.gain.value = 0.14;
+  const fb = ctx.createGain(); fb.gain.value = 0.18;
+  const wet = ctx.createGain(); wet.gain.value = 0.09;
   delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(master);
 
   const noiseBuf = ctx.createBuffer(1, sr, sr);
@@ -131,34 +151,44 @@ export async function generateMusic(
   const motifLen = 3 + Math.floor(rng() * 4);
   const motif = Array.from({ length: motifLen }, () => Math.floor(rng() * sl) + (rng() < 0.25 ? sl : 0));
 
-  const tone = (freq: number, start: number, len: number, type: Wave, gain: number, pan: number, send = 0.2) => {
-    const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
+  const tone = (freq: number, start: number, len: number, type: Wave, gain: number, pan: number, rev = 0.25) => {
     const g = ctx.createGain();
-    const a = Math.min(0.4, len * 0.25), r = Math.min(1.2, len * 0.4);
+    const a = Math.min(0.6, Math.max(0.02, len * 0.22));
+    const r = Math.min(2.2, len * 0.55);
+    const gv = Math.max(0.0004, gain);
     g.gain.setValueAtTime(0.0001, start);
-    g.gain.linearRampToValueAtTime(gain, start + a);
-    g.gain.setValueAtTime(gain, start + Math.max(a, len - r));
-    g.gain.linearRampToValueAtTime(0.0001, start + len);
-    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cfg.cutoff;
+    g.gain.exponentialRampToValueAtTime(gv, start + a);
+    g.gain.setValueAtTime(gv, start + Math.max(a, len - r));
+    g.gain.exponentialRampToValueAtTime(0.0001, start + len);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cfg.cutoff; lp.Q.value = 0.7;
     const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan));
-    o.connect(g); g.connect(lp); lp.connect(p); p.connect(master);
-    if (send > 0) { const sn = ctx.createGain(); sn.gain.value = send; p.connect(sn); sn.connect(delay); }
-    o.start(start); o.stop(start + len + 0.05);
+    // Unison: layered, slightly detuned voices for a warmer, richer timbre.
+    const voices = type === "sine" ? [0] : [-6, 6];
+    for (const dt of voices) {
+      const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; o.detune.value = dt;
+      o.connect(g); o.start(start); o.stop(start + len + 0.1);
+    }
+    g.connect(lp); lp.connect(p); p.connect(master);
+    if (rev > 0) { const rs = ctx.createGain(); rs.gain.value = rev; p.connect(rs); rs.connect(reverb); }
+    const es = ctx.createGain(); es.gain.value = 0.1; p.connect(es); es.connect(delay);
   };
-  const kick = (t: number, gain = 0.9) => {
+  const kick = (t: number, gain = 0.7) => {
     const o = ctx.createOscillator(); o.type = "sine";
-    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.11);
-    const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.2);
+    o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2500;
+    o.connect(g); g.connect(lp); lp.connect(master); o.start(t); o.stop(t + 0.24);
   };
   const noiseHit = (t: number, len: number, hp: number, gain: number) => {
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
     const f = ctx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = hp;
     const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
-    src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + len + 0.02);
+    src.connect(f); f.connect(g); g.connect(master);
+    const rs = ctx.createGain(); rs.gain.value = 0.08; g.connect(rs); rs.connect(reverb);
+    src.start(t); src.stop(t + len + 0.02);
   };
-  const hat = (t: number, gain = 0.12) => noiseHit(t, 0.05, 7000, gain);
-  const snare = (t: number, gain = 0.3) => noiseHit(t, 0.18, 1800, gain);
+  const hat = (t: number, gain = 0.08) => noiseHit(t, 0.045, 8000, gain);
+  const snare = (t: number, gain = 0.22) => noiseHit(t, 0.16, 1600, gain);
 
   const note = (deg: number, oct: number) => {
     const idx = ((deg % sl) + sl) % sl;

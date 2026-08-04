@@ -9,6 +9,7 @@ const CORE_BASE = `${import.meta.env.BASE_URL}ffmpeg`;
 
 let ffmpeg: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
+let mtDisabled = false; // set if the multi-thread core fails; fall back to single-thread
 
 // Ring buffer of the most recent ffmpeg log lines, surfaced on error so
 // failures are actually diagnosable in the UI/console.
@@ -20,6 +21,11 @@ function pushLog(line: string) {
 export function getRecentFfmpegLog(): string {
   return recentLogs.slice(-8).join("\n");
 }
+
+// Timeouts (ms) so a stuck ffmpeg operation (e.g. a multi-thread pthread
+// deadlock under Turbo) fails instead of freezing the UI forever.
+const T_CLIP = 60000;    // per-clip encode / remux (short: catches a stuck mt core fast)
+const T_FINAL = 300000;  // concat / mux / audio
 
 async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg) return ffmpeg;
@@ -38,12 +44,12 @@ async function getFFmpeg(): Promise<FFmpeg> {
       // Use the multi-threaded core when the page is cross-origin isolated
       // (Turbo mode enabled the COOP/COEP service worker). Much faster; falls
       // back to the single-threaded core otherwise.
-      const mt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true;
+      const mt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
       if (mt) {
         await instance.load({
-          coreURL: `${CORE_BASE}/mt/ffmpeg-core.js${v}`,
-          wasmURL: `${CORE_BASE}/mt/ffmpeg-core.wasm${v}`,
-          workerURL: `${CORE_BASE}/mt/ffmpeg-core.worker.js${v}`,
+          coreURL: `${CORE_BASE}/mt/ffmpeg-core.js`,
+          wasmURL: `${CORE_BASE}/mt/ffmpeg-core.wasm`,
+          workerURL: `${CORE_BASE}/mt/ffmpeg-core.worker.js`,
         });
       } else {
         await instance.load({
@@ -125,7 +131,7 @@ async function writeMusic(ff: FFmpeg, parts: Uint8Array[]): Promise<string | nul
   const chain = names.map((_, i) => `[a${i}]`).join("");
   const fc = `${pre};${chain}concat=n=${names.length}:v=0:a=1[a]`;
   try {
-    await ff.exec([...inputs, "-filter_complex", fc, "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-y", "music_cat.m4a"]);
+    await ff.exec([...inputs, "-filter_complex", fc, "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-y", "music_cat.m4a"], T_FINAL);
     for (const n of names) await ff.deleteFile(n).catch(() => {});
     return "music_cat.m4a";
   } catch (e) {
@@ -154,7 +160,7 @@ async function muxMusic(
       "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
       "-af", af, "-t", String(realDuration),
       "-movflags", "+faststart", "-y", "final.mp4",
-    ]);
+    ], T_FINAL);
     return "final.mp4";
   } catch (e) {
     pushLog(`music mix failed, exporting silent cut: ${e instanceof Error ? e.message : String(e)}`);
@@ -163,13 +169,29 @@ async function muxMusic(
 }
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
-  const { clips, width, height, crf, fps, perClipCap, targetDuration, fast, styleVf, varyCuts, music, onProgress } = opts;
+  opts.onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
+  const usedMt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
+  const attempt = async (): Promise<GenerateOutput> => {
+    await resetFFmpeg(); // fresh heap per video — prevents cross-video OOM cascades
+    const ff = await getFFmpeg();
+    return opts.fast ? generateFast(ff, opts) : generateStandard(ff, opts);
+  };
+  try {
+    return await attempt();
+  } catch (e) {
+    // If the multi-threaded core failed/hung (Turbo), disable it and retry on the
+    // reliable single-thread core — for this video and the rest of the session.
+    if (usedMt && !mtDisabled) {
+      mtDisabled = true;
+      pushLog(`multi-thread core failed (${e instanceof Error ? e.message : String(e)}); retrying single-thread`);
+      return await attempt();
+    }
+    throw e;
+  }
+}
 
-  onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
-  await resetFFmpeg(); // fresh heap per video — prevents cross-video OOM cascades
-  const ff = await getFFmpeg();
-
-  if (fast) return generateFast(ff, opts);
+async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<GenerateOutput> {
+  const { clips, width, height, crf, fps, perClipCap, targetDuration, styleVf, varyCuts, music, onProgress } = opts;
 
   // ---- Standard mode: normalize unique clips, then fill EXACTLY to target,
   // repeating clips if there isn't enough unique footage. ----
@@ -228,7 +250,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     if (fin) filters.push(`fade=t=in:st=0:d=${Math.min(FADE_IN, len * 0.5).toFixed(3)}`);
     if (fout) { const fo = Math.min(FADE_OUT, len * 0.6); filters.push(`fade=t=out:st=${Math.max(0, len - fo).toFixed(3)}:d=${fo.toFixed(3)}`); }
     const vf = [...filters, ...parts].join(",");
-    await ff.exec(["-i", srcFile, "-t", String(len), "-vf", vf, "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", name]);
+    await ff.exec(["-i", srcFile, "-t", String(len), "-vf", vf, "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", name], T_CLIP);
     return name;
   };
 
@@ -243,7 +265,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
 
   const list = order.map((o) => `file '${o.file}'`).join("\n");
   await ff.writeFile("concat.txt", new TextEncoder().encode(list));
-  await ff.exec(["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4"]);
+  await ff.exec(["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4"], T_FINAL);
 
   let outputName = "video.mp4";
   if (music) { onProgress({ stage: "audio", progress: 92, message: "Mixing music…" }); outputName = await muxMusic(ff, "video.mp4", music, realDuration); }
@@ -279,7 +301,7 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     const off = (Math.random() * Math.max(0, Math.min(clip.duration * 0.4, clip.duration - 3))).toFixed(2);
     const segLen = Math.max(1, clip.duration - Number(off));
     try {
-      await ff.exec(["-ss", off, "-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts]);
+      await ff.exec(["-ss", off, "-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts], T_CLIP);
       parts.push({ ts, len: segLen }); usedClips.push(clip); uniqueLen += segLen;
     } catch (e) { remuxFailures++; pushLog(`fast remux failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); }
     finally { await ff.deleteFile(mp4).catch(() => {}); }
@@ -299,7 +321,7 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
   const list = order.map((f) => `file '${f}'`).join("\n");
   await ff.writeFile("concat.txt", new TextEncoder().encode(list));
   try {
-    await ff.exec(["-fflags", "+genpts", "-f", "concat", "-safe", "0", "-i", "concat.txt", "-t", String(realDuration), "-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-y", "video.mp4"]);
+    await ff.exec(["-fflags", "+genpts", "-f", "concat", "-safe", "0", "-i", "concat.txt", "-t", String(realDuration), "-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-y", "video.mp4"], T_FINAL);
   } catch (e) {
     throw new Error("Fast mode couldn't join these clips (incompatible H.264 parameters). Try Standard mode.");
   }
