@@ -13,49 +13,50 @@ export interface Theme {
   id: string;
   label: string;
   query: string;
+  alts?: string[]; // alternate search queries — rotated per video for more variety
   icon: LucideIcon;
 }
 
 export const RANDOM_THEME_ID = "random";
 
 export const themes: Theme[] = [
-  { id: "nature", label: "Nature", query: "nature landscape", icon: Mountain },
-  { id: "forest", label: "Forest", query: "forest woods", icon: Trees },
-  { id: "ocean", label: "Ocean", query: "ocean waves", icon: Waves },
-  { id: "underwater", label: "Underwater", query: "underwater sea life", icon: Fish },
-  { id: "mountains", label: "Mountains", query: "mountains peaks", icon: Mountain },
-  { id: "sunset", label: "Sunset", query: "sunset sky", icon: Sunset },
-  { id: "sky", label: "Sky", query: "sky clouds timelapse", icon: Cloud },
-  { id: "winter", label: "Winter", query: "winter snow", icon: Snowflake },
-  { id: "rain", label: "Rain", query: "rain drops", icon: CloudRain },
-  { id: "flowers", label: "Flowers", query: "flowers blooming", icon: Flower2 },
-  { id: "autumn", label: "Autumn", query: "autumn leaves", icon: Leaf },
-  { id: "animals", label: "Animals", query: "wild animals", icon: Dog },
-  { id: "birds", label: "Birds", query: "birds flying", icon: Bird },
-  { id: "city", label: "City", query: "city street", icon: Building2 },
-  { id: "nightcity", label: "Night city", query: "city night lights", icon: Moon },
-  { id: "travel", label: "Travel", query: "travel destination", icon: Plane },
-  { id: "space", label: "Space", query: "space stars galaxy", icon: Rocket },
-  { id: "technology", label: "Technology", query: "technology computer", icon: Laptop },
-  { id: "business", label: "Business", query: "business office", icon: Briefcase },
-  { id: "people", label: "People", query: "people lifestyle", icon: Users },
-  { id: "sport", label: "Sport", query: "sport fitness", icon: Dumbbell },
-  { id: "yoga", label: "Yoga", query: "yoga meditation", icon: Bike },
-  { id: "food", label: "Food", query: "food cooking", icon: UtensilsCrossed },
-  { id: "coffee", label: "Coffee", query: "coffee cafe", icon: Coffee },
-  { id: "farm", label: "Farm", query: "farm agriculture field", icon: Tractor },
-  { id: "cars", label: "Cars", query: "cars driving", icon: Car },
-  { id: "aerial", label: "Aerial", query: "aerial drone landscape", icon: Wind },
-  { id: "camping", label: "Camping", query: "camping outdoor", icon: Tent },
-  { id: "architecture", label: "Architecture", query: "architecture building", icon: Landmark },
-  { id: "art", label: "Art", query: "art painting creative", icon: Palette },
-  { id: "photography", label: "Photography", query: "camera photography", icon: Camera },
-  { id: "fire", label: "Fire", query: "fire flames bonfire", icon: Flame },
-  { id: "abstract", label: "Abstract", query: "abstract motion background", icon: Sparkles },
-  { id: "luxury", label: "Luxury", query: "luxury elegant", icon: Gem },
-  { id: "world", label: "World", query: "world famous landmarks", icon: Globe },
-  { id: "family", label: "Family", query: "happy family outdoors", icon: Baby },
-  { id: "sunny", label: "Sunny", query: "sunny summer day", icon: Sun },
+  { id: "nature", label: "Nature", query: "nature landscape", alts: ["mountain river", "green valley", "wilderness scenery", "sunrise landscape"], icon: Mountain },
+  { id: "forest", label: "Forest", query: "forest woods", alts: ["pine forest", "misty forest", "jungle trees", "forest path"], icon: Trees },
+  { id: "ocean", label: "Ocean", query: "ocean waves", alts: ["sea coast", "beach waves", "tropical sea", "crashing waves"], icon: Waves },
+  { id: "underwater", label: "Underwater", query: "underwater sea life", alts: ["coral reef", "scuba diving", "fish underwater", "deep sea"], icon: Fish },
+  { id: "mountains", label: "Mountains", query: "mountains peaks", alts: ["snowy mountains", "alps landscape", "mountain range", "hiking mountains"], icon: Mountain },
+  { id: "sunset", label: "Sunset", query: "sunset sky", alts: ["golden hour", "sunset beach", "orange sunset", "dusk horizon"], icon: Sunset },
+  { id: "sky", label: "Sky", query: "sky clouds timelapse", alts: ["blue sky clouds", "clouds moving", "cloudscape", "dramatic sky"], icon: Cloud },
+  { id: "winter", label: "Winter", query: "winter snow", alts: ["snow falling", "snowy landscape", "frozen winter", "snow forest"], icon: Snowflake },
+  { id: "rain", label: "Rain", query: "rain drops", alts: ["rainy window", "rain city", "storm rain", "raindrops closeup"], icon: CloudRain },
+  { id: "flowers", label: "Flowers", query: "flowers blooming", alts: ["flower field", "spring flowers", "rose closeup", "wildflowers"], icon: Flower2 },
+  { id: "autumn", label: "Autumn", query: "autumn leaves", alts: ["fall foliage", "autumn forest", "golden leaves", "autumn park"], icon: Leaf },
+  { id: "animals", label: "Animals", query: "wild animals", alts: ["wildlife safari", "animals nature", "birds wildlife", "deer forest"], icon: Dog },
+  { id: "birds", label: "Birds", query: "birds flying", alts: ["birds sky", "flock of birds", "eagle flying", "birds nature"], icon: Bird },
+  { id: "city", label: "City", query: "city street", alts: ["city skyline", "urban downtown", "city traffic", "modern city"], icon: Building2 },
+  { id: "nightcity", label: "Night city", query: "city night lights", alts: ["neon city night", "night traffic", "city lights bokeh", "downtown night"], icon: Moon },
+  { id: "travel", label: "Travel", query: "travel destination", alts: ["tourist landmarks", "vacation travel", "exploring city", "travel adventure"], icon: Plane },
+  { id: "space", label: "Space", query: "space stars galaxy", alts: ["milky way", "starry night sky", "nebula space", "cosmos stars"], icon: Rocket },
+  { id: "technology", label: "Technology", query: "technology computer", alts: ["data server", "coding screen", "circuit board", "futuristic tech"], icon: Laptop },
+  { id: "business", label: "Business", query: "business office", alts: ["team meeting", "office work", "handshake business", "corporate office"], icon: Briefcase },
+  { id: "people", label: "People", query: "people lifestyle", alts: ["friends together", "people walking", "diverse people", "happy people"], icon: Users },
+  { id: "sport", label: "Sport", query: "sport fitness", alts: ["running athlete", "gym workout", "football sport", "cycling sport"], icon: Dumbbell },
+  { id: "yoga", label: "Yoga", query: "yoga meditation", alts: ["yoga pose", "meditation calm", "pilates workout", "stretching wellness"], icon: Bike },
+  { id: "food", label: "Food", query: "food cooking", alts: ["chef cooking", "delicious food", "restaurant food", "food preparation"], icon: UtensilsCrossed },
+  { id: "coffee", label: "Coffee", query: "coffee cafe", alts: ["coffee pouring", "barista latte", "coffee cup closeup", "cozy cafe"], icon: Coffee },
+  { id: "farm", label: "Farm", query: "farm agriculture field", alts: ["tractor field", "harvest farm", "countryside farm", "farming crops"], icon: Tractor },
+  { id: "cars", label: "Cars", query: "cars driving", alts: ["sports car", "highway driving", "luxury car", "car city road"], icon: Car },
+  { id: "aerial", label: "Aerial", query: "aerial drone landscape", alts: ["drone footage nature", "aerial city", "birds eye view", "drone coastline"], icon: Wind },
+  { id: "camping", label: "Camping", query: "camping outdoor", alts: ["campfire night", "tent nature", "hiking camp", "adventure outdoors"], icon: Tent },
+  { id: "architecture", label: "Architecture", query: "architecture building", alts: ["modern architecture", "historic building", "skyscraper facade", "interior design"], icon: Landmark },
+  { id: "art", label: "Art", query: "art painting creative", alts: ["artist painting", "abstract art", "street art", "creative studio"], icon: Palette },
+  { id: "photography", label: "Photography", query: "camera photography", alts: ["photographer shooting", "vintage camera", "photo studio", "lens closeup"], icon: Camera },
+  { id: "fire", label: "Fire", query: "fire flames bonfire", alts: ["campfire flames", "burning fire", "fireplace cozy", "fire sparks"], icon: Flame },
+  { id: "abstract", label: "Abstract", query: "abstract motion background", alts: ["colorful abstract", "particles motion", "liquid abstract", "geometric loop"], icon: Sparkles },
+  { id: "luxury", label: "Luxury", query: "luxury lifestyle", alts: ["luxury yacht", "elegant interior", "luxury fashion", "premium lifestyle"], icon: Gem },
+  { id: "world", label: "World", query: "world famous landmarks", alts: ["europe travel", "asia landmarks", "famous monuments", "cultural landmarks"], icon: Globe },
+  { id: "family", label: "Family", query: "happy family outdoors", alts: ["family fun", "parents children", "family home", "family picnic"], icon: Baby },
+  { id: "sunny", label: "Sunny", query: "sunny summer day", alts: ["summer beach", "sunshine nature", "bright summer", "summer vibes"], icon: Sun },
 ];
 
 export function randomTheme(exclude?: Set<string>): Theme {
@@ -122,6 +123,29 @@ export const videoSources: VideoSource[] = [
   { id: VSOURCE_PEXELS, label: "Pexels", icon: Film },
   { id: VSOURCE_PIXABAY, label: "Pixabay", icon: Camera },
 ];
+
+// ---- Look / color-grade styles (applied in Standard mode) ----
+export interface VideoStyle { id: string; label: string; icon: LucideIcon; vf?: string; }
+export const STYLE_NONE = "none";
+export const STYLE_AUTO = "auto";
+export const videoStyles: VideoStyle[] = [
+  { id: "none", label: "None", icon: Palette },
+  { id: "auto", label: "Auto (random)", icon: Shuffle },
+  { id: "cinematic", label: "Cinematic", icon: Film, vf: "eq=contrast=1.08:saturation=0.92,colorbalance=rs=0.04:bs=-0.04,vignette=PI/5" },
+  { id: "vibrant", label: "Vibrant", icon: Sparkles, vf: "eq=contrast=1.12:saturation=1.5:brightness=0.02" },
+  { id: "warm", label: "Warm", icon: Sun, vf: "colorbalance=rs=0.12:gs=0.03:bs=-0.10,eq=saturation=1.10" },
+  { id: "cool", label: "Cool", icon: Snowflake, vf: "colorbalance=rs=-0.10:gs=0.0:bs=0.12,eq=saturation=1.05" },
+  { id: "vintage", label: "Vintage", icon: Camera, vf: "colorbalance=rs=0.10:bs=-0.12,eq=saturation=0.80:contrast=1.05,noise=alls=7:allf=t,vignette=PI/4.5" },
+  { id: "noir", label: "Noir B&W", icon: Moon, vf: "hue=s=0,eq=contrast=1.22:brightness=0.02,vignette=PI/5" },
+];
+
+/** Resolve a style id to an ffmpeg -vf fragment (Auto picks a random look). */
+export function styleVf(id: string): string | null {
+  if (id === STYLE_NONE) return null;
+  let st = videoStyles.find((v) => v.id === id);
+  if (id === STYLE_AUTO) { const pool = videoStyles.filter((v) => v.vf); st = pool[Math.floor(Math.random() * pool.length)]; }
+  return st?.vf ?? null;
+}
 
 /**
  * Fast mode joins clips WITHOUT re-encoding, so every clip must share the exact

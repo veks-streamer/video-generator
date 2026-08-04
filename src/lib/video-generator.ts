@@ -75,6 +75,8 @@ export interface GenerateOptions {
   perClipCap: number;
   targetDuration: number; // exact output length in seconds
   fast: boolean;          // fast mode = join without re-encoding
+  styleVf: string | null; // optional color-grade filter (Standard mode)
+  varyCuts: boolean;      // randomize per-clip length for varied pacing (Standard)
   music: { parts: Uint8Array[]; loop: boolean; volume: number } | null;
   onProgress: (p: ProgressUpdate) => void;
 }
@@ -149,7 +151,7 @@ async function muxMusic(
 }
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
-  const { clips, width, height, crf, fps, perClipCap, targetDuration, fast, music, onProgress } = opts;
+  const { clips, width, height, crf, fps, perClipCap, targetDuration, fast, styleVf, varyCuts, music, onProgress } = opts;
 
   onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
   await resetFFmpeg(); // fresh heap per video — prevents cross-video OOM cascades
@@ -171,7 +173,8 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     let data: Uint8Array;
     try { data = await fetchClip(clip.url); } catch (e) { downloadFailures++; pushLog(`download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     const src = `s${i}.mp4`, out = `n${i}.mp4`;
-    const len = Math.min(clip.duration, perClipCap);
+    const cut = varyCuts ? 2.5 + Math.random() * Math.max(0.5, perClipCap - 2.5) : perClipCap;
+    const len = Math.min(clip.duration, cut);
     // Random window inside the clip so the same footage looks different each run.
     const off = (Math.random() * Math.max(0, clip.duration - len)).toFixed(2);
     await ff.writeFile(src, data);
@@ -179,7 +182,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     try {
       await ff.exec([
         "-ss", off, "-i", src, "-t", String(len),
-        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},setsar=1,fps=${fps},format=yuv420p`,
+        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},setsar=1,fps=${fps}${styleVf ? "," + styleVf : ""},format=yuv420p`,
         "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", out,
       ]);
       segs.push({ file: out, len }); usedClips.push(clip); uniqueLen += len;

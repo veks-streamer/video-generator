@@ -16,7 +16,7 @@ import { ActivityLog, type LogEntry, type LogLevel } from "@/components/activity
 import { Play, Plus, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge, Layers, Film, Cpu, Loader2, X, Maximize2 } from "lucide-react";
 import {
   aspectRatios, qualities, framerates, encodingModes, fastStdSize, MODE_FAST,
-  videoSources, VSOURCE_PIXABAY, themes, randomTheme, RANDOM_THEME_ID, formatElapsed,
+  videoSources, VSOURCE_PIXABAY, videoStyles, styleVf, STYLE_NONE, themes, randomTheme, RANDOM_THEME_ID, formatElapsed,
   generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_JAMENDO, MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
 import type { ProgressUpdate, VideoResult, Theme, VideoClip } from "@/lib/constants";
@@ -56,7 +56,7 @@ function storedToResult(s: StoredVideo): VideoResult {
 interface Snap {
   themeId: string | null; customQuery: string;
   aspectId: string; qualityId: string; fpsId: string; mode: string; duration: number;
-  videoSource: string; musicSource: string; genGenre: string; jamGenre: string;
+  videoSource: string; style: string; musicSource: string; genGenre: string; jamGenre: string;
   musicFile: File | null; musicVolume: number; count: number;
 }
 interface Job { id: string; label: string; snap: Snap }
@@ -78,6 +78,7 @@ export default function Home() {
   const [duration, setDuration] = useState(60);
   const [batch, setBatch] = useState("1");
   const [videoSource, setVideoSource] = useState("pexels");
+  const [style, setStyle] = useState(STYLE_NONE);
   const [musicSource, setMusicSource] = useState(MUSIC_JAMENDO);
   const [genGenre, setGenGenre] = useState("uplifting");
   const [jamGenre, setJamGenre] = useState(MUSIC_RANDOM);
@@ -123,7 +124,7 @@ export default function Home() {
   const isHeavy = !isFast && (duration > 180 || qualityId === "hd" || fpsId === "60" || count >= 10);
 
   function currentSnap(): Snap {
-    return { themeId, customQuery, aspectId, qualityId, fpsId, mode, duration, videoSource, musicSource, genGenre, jamGenre, musicFile, musicVolume, count };
+    return { themeId, customQuery, aspectId, qualityId, fpsId, mode, duration, videoSource, style, musicSource, genGenre, jamGenre, musicFile, musicVolume, count };
   }
   function describe(s: Snap): string {
     const t = s.customQuery.trim() || (s.themeId === RANDOM_THEME_ID ? "random" : s.themeId);
@@ -132,9 +133,11 @@ export default function Home() {
   }
   function pickTheme(s: Snap): { query: string; label: string } {
     if (s.customQuery.trim()) return { query: s.customQuery.trim(), label: s.customQuery.trim() };
-    if (s.themeId === RANDOM_THEME_ID) { const t = randomTheme(); return { query: t.query, label: t.label }; }
-    const t = themes.find((x) => x.id === s.themeId) as Theme;
-    return { query: t.query, label: t.label };
+    const t = s.themeId === RANDOM_THEME_ID ? randomTheme() : (themes.find((x) => x.id === s.themeId) as Theme);
+    // rotate among the theme's query variants for a bigger, fresher clip pool
+    const variants = [t.query, ...(t.alts ?? [])];
+    const query = variants[Math.floor(Math.random() * variants.length)];
+    return { query, label: t.label };
   }
 
   async function resolveMusic(
@@ -231,9 +234,11 @@ export default function Home() {
 
     // Fast mode needs same-size, native-fps clips. Pixabay (no fps) and Square
     // (no native size) can't do it — auto-fall back to Standard instead of failing.
+    const vf = styleVf(s.style);
     let fast = s.mode === MODE_FAST;
     if (fast && pix) { fast = false; addLog("warn", `Video ${index + 1}/${total}: Pixabay → using Standard mode (Fast needs native fps).`); }
     if (fast && s.aspectId === "square") { fast = false; addLog("warn", `Video ${index + 1}/${total}: Square → using Standard mode.`); }
+    if (fast && s.style !== STYLE_NONE) { fast = false; addLog("warn", `Video ${index + 1}/${total}: “${s.style}” style → using Standard mode.`); }
 
     let width: number, height: number, exact: boolean;
     if (fast) {
@@ -290,7 +295,7 @@ export default function Home() {
     let blob: Blob, outDur: number, usedClips: VideoClip[];
     let usedW = width, usedH = height, usedFast = fast;
     try {
-      const r = await generateVideo({ clips: selected, width, height, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast, music, onProgress });
+      const r = await generateVideo({ clips: selected, width, height, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast, styleVf: fast ? null : vf, varyCuts: !fast, music, onProgress });
       blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -300,7 +305,7 @@ export default function Home() {
         const sw = even(aspect.width * quality.scale);
         const sh = even(aspect.height * quality.scale);
         usedW = sw; usedH = sh; usedFast = false;
-        const r = await generateVideo({ clips: selected, width: sw, height: sh, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast: false, music, onProgress });
+        const r = await generateVideo({ clips: selected, width: sw, height: sh, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast: false, styleVf: vf, varyCuts: true, music, onProgress });
         blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
       } else {
         throw e;
@@ -461,6 +466,9 @@ export default function Home() {
                 <Separator />
                 <OptionSelector label="Mode" labelIcon={Cpu} items={encodingModes} value={mode} onChange={setMode} />
                 {isFast && (<p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5 -mt-4"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />Fast mode joins same-size clips without re-encoding — much faster. Length is approximate. (Square not supported.)</p>)}
+                <Separator />
+                <OptionSelector label="Style (look)" labelIcon={Sparkles} items={videoStyles} value={style} onChange={setStyle} />
+                {style !== STYLE_NONE && (<p className="text-xs text-muted-foreground -mt-4">Styles color-grade the video and use Standard mode (a bit slower than Fast). “Auto” picks a different look each video for extra variety.</p>)}
                 <Separator />
                 <DurationSlider value={duration} onChange={setDuration} min={10} max={600} step={5} />
                 <Separator />
