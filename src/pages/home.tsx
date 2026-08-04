@@ -226,20 +226,22 @@ export default function Home() {
     const quality = qualities.find((q) => q.id === s.qualityId)!;
     const fps = framerates.find((f) => f.id === s.fpsId)!.fps;
     const perClipCap = s.duration > 180 ? 12 : 6;
-    const fast = s.mode === MODE_FAST;
     const pix = s.videoSource === VSOURCE_PIXABAY;
+    if (pix && !hasPixabayKey()) throw new Error("Add your Pixabay API key in Settings to use Pixabay.");
+
+    // Fast mode needs same-size, native-fps clips. Pixabay (no fps) and Square
+    // (no native size) can't do it — auto-fall back to Standard instead of failing.
+    let fast = s.mode === MODE_FAST;
+    if (fast && pix) { fast = false; addLog("warn", `Video ${index + 1}/${total}: Pixabay → using Standard mode (Fast needs native fps).`); }
+    if (fast && s.aspectId === "square") { fast = false; addLog("warn", `Video ${index + 1}/${total}: Square → using Standard mode.`); }
 
     let width: number, height: number, exact: boolean;
     if (fast) {
-      const std = fastStdSize(s.aspectId, s.qualityId);
-      if (!std) throw new Error("Fast mode doesn't support Square. Use Standard mode or another aspect ratio.");
+      const std = fastStdSize(s.aspectId, s.qualityId)!;
       width = std.w; height = std.h; exact = true;
     } else {
       width = even(aspect.width * quality.scale); height = even(aspect.height * quality.scale); exact = false;
     }
-
-    if (pix && fast) throw new Error("Pixabay works in Standard mode only. Use Pexels for Fast mode.");
-    if (pix && !hasPixabayKey()) throw new Error("Add your Pixabay API key in Settings to use Pixabay.");
 
     // Search with automatic retry: for a Random theme, if a theme has no clips at
     // the exact size/fps, switch to a different random theme and try again.
@@ -367,10 +369,6 @@ export default function Home() {
 
   function handleGenerate() {
     if (!canEnqueue) return;
-    if (fastSquareBlocked) {
-      toast({ title: "Fast mode + Square", description: "Fast mode can't do Square. Pick another aspect ratio or use Standard mode.", variant: "destructive" });
-      return;
-    }
     (async () => { try { if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); } catch { /* */ } })();
 
     const snap = currentSnap();

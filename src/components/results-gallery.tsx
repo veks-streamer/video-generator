@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, DownloadCloud, Trash2, Film, Clock, Music, Timer } from "lucide-react";
+import { Download, DownloadCloud, Trash2, Film, Clock, Music, Timer, MonitorPlay } from "lucide-react";
 import type { VideoResult } from "@/lib/constants";
 import { formatElapsed } from "@/lib/constants";
 
@@ -75,6 +75,9 @@ export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onCl
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
                   <Film className="h-3 w-3" /> {r.themeLabel}
+                </Badge>
+                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
+                  <MonitorPlay className="h-3 w-3" /> {r.aspectLabel}
                 </Badge>
                 <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
                   <Clock className="h-3 w-3" /> {fmt(r.duration)}
