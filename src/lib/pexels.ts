@@ -75,14 +75,13 @@ export async function searchVideos(
 ): Promise<VideoClip[]> {
   const needed = Math.ceil(targetDuration / 5) + 3;
   const clips: VideoClip[] = [];
-  let scanned = 0;
 
-  // Scan up to 4 pages (rotating from `page`) to find enough strictly-matching clips.
-  for (let i = 0; i < 4; i++) {
-    const pnum = ((page - 1 + i) % 100) + 1;
+  // Always scan from page 1 (niche themes with few matches live there), up to a
+  // handful of pages, gathering a big pool. Variety across generations comes from
+  // shuffling + the used-clip memory, not from skipping early pages.
+  for (let pnum = 1; pnum <= 8; pnum++) {
     const videos = await fetchPage(query, apiKey, pnum);
     if (videos.length === 0) break;
-    scanned += videos.length;
     for (const v of videos) {
       if (v.duration < 4 || v.duration > 25) continue;
       const f = pickStrictFile(v, targetFps, targetWidth, targetHeight, exact);
@@ -100,7 +99,7 @@ export async function searchVideos(
         videographer: v.user?.name ?? "Pexels",
       });
     }
-    if (clips.length >= needed * 2) break;
+    if (clips.length >= Math.max(needed * 3, 40) && pnum >= 2) break;
   }
 
   if (clips.length === 0) {

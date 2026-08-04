@@ -246,7 +246,7 @@ export default function Home() {
     const isRandom = !s.customQuery.trim() && s.themeId === RANDOM_THEME_ID;
     let query = "", label = "";
     let selected: VideoClip[] = [];
-    const maxTries = isRandom ? 6 : 1;
+    const maxTries = isRandom ? 8 : 1;
     for (let attempt = 0; attempt < maxTries; attempt++) {
       const t = pickTheme(s);
       query = t.query; label = t.label;
@@ -259,7 +259,13 @@ export default function Home() {
           : await searchVideos(query, getPexelsKey(), s.duration, page, fps, width, height, exact);
         const sel = selectClips(found, Math.ceil(s.duration * 1.7) + perClipCap, perClipCap, used);
         addLog("info", `Video ${index + 1}/${total}: “${label}” — ${found.length} found, using ${sel.length} (${width}×${height}@${fps}, ${pix ? "Pixabay" : "Pexels"}${fast ? ", fast" : ""})`);
-        if (sel.length > 0) { selected = sel; break; }
+        if (sel.length > 0) {
+          const uniqueDur = sel.reduce((a, c) => a + Math.min(c.duration, perClipCap), 0);
+          const enough = uniqueDur >= s.duration * 0.6 || sel.length >= 10;
+          if (!isRandom || enough || attempt === maxTries - 1) { selected = sel; break; }
+          addLog("warn", `Video ${index + 1}/${total}: “${label}” only ~${Math.round(uniqueDur)}s of unique footage — trying a richer theme…`);
+          continue;
+        }
         throw new Error(`No usable clips for “${label}”.`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -276,6 +282,7 @@ export default function Home() {
     addLog("info", `Video ${index + 1}/${total}: music = ${musicLabel}`);
 
     let blob: Blob, outDur: number, usedClips: VideoClip[];
+    let usedW = width, usedH = height, usedFast = fast;
     try {
       const r = await generateVideo({ clips: selected, width, height, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast, music, onProgress });
       blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
@@ -286,6 +293,7 @@ export default function Home() {
         addLog("warn", `Video ${index + 1}/${total}: Fast mode failed (${msg}) — retrying in Standard mode…`);
         const sw = even(aspect.width * quality.scale);
         const sh = even(aspect.height * quality.scale);
+        usedW = sw; usedH = sh; usedFast = false;
         const r = await generateVideo({ clips: selected, width: sw, height: sh, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast: false, music, onProgress });
         blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
       } else {
@@ -298,7 +306,7 @@ export default function Home() {
     const result: VideoResult = {
       id: `${Date.now()}-${index}-${Math.floor(Math.random() * 1e4)}`,
       url: URL.createObjectURL(blob), blob, duration: outDur,
-      themeLabel: label, aspectLabel: `${aspect.label} · ${fps}fps${fast ? " · fast" : ""}`,
+      themeLabel: label, aspectLabel: `${usedW}×${usedH} · ${fps}fps${usedFast ? " · fast" : ""}`,
       musicLabel, createdAt: new Date().toISOString(), elapsedMs: performance.now() - started,
     };
     await saveVideo({ id: result.id, blob, duration: outDur, themeLabel: result.themeLabel, aspectLabel: result.aspectLabel, musicLabel: result.musicLabel, createdAt: result.createdAt, elapsedMs: result.elapsedMs }).catch(() => {});

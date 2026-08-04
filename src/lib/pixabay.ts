@@ -35,8 +35,7 @@ export async function searchPixabay(
   const needed = Math.ceil(targetDuration / 5) + 3;
   const clips: VideoClip[] = [];
 
-  for (let i = 0; i < 3; i++) {
-    const p = ((page - 1 + i) % 50) + 1;
+  for (let p = 1; p <= 5; p++) {
     const url = `${BASE}?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&per_page=80&page=${p}&safesearch=true`;
     const res = await fetch(url);
     if (res.status === 400 || res.status === 401 || res.status === 429) {
@@ -63,7 +62,7 @@ export async function searchPixabay(
         videographer: h.user ?? "Pixabay",
       });
     }
-    if (clips.length >= needed * 2) break;
+    if (clips.length >= Math.max(needed * 3, 40) && p >= 2) break;
   }
 
   if (clips.length === 0) {
