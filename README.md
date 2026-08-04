@@ -1,11 +1,10 @@
 # 🎬 Video Generator
 
-Create video montages **entirely in your browser** from royalty-free
-[Pexels](https://www.pexels.com/) clips — with real background music, batch mode,
-and full control over resolution and framerate. There is **no backend**: clips are
-fetched client-side and stitched together with
-[ffmpeg.wasm](https://ffmpegwasm.netlify.app/), so the whole thing runs as a static
-site on GitHub Pages.
+Create video montages **entirely in your browser** from royalty-free stock clips —
+with real or generated background music, batch mode, and full control over
+resolution and framerate. There is **no backend**: clips are fetched client-side
+and assembled with [ffmpeg.wasm](https://ffmpegwasm.netlify.app/), so the whole
+thing runs as a static site on GitHub Pages.
 
 **▶ Live app:** https://veks-streamer.github.io/video-generator/
 
@@ -16,45 +15,46 @@ The exact deployed build (commit + run #) is shown on a ribbon at the top of the
 ## ✨ Features
 
 ### Video
-- **Two video sources:** Pexels (native-fps accurate) and Pixabay (Standard mode) — both royalty-free for commercial use.
-- **37 SFW themes** (nature, ocean, city, space, forest, sunset, travel, food, sport…) **plus a free-text search box**.
-- **Random theme** — picks one for you; in a batch it varies **per video**.
+- **Two sources, both royalty-free for commercial use:** **Pexels** (framerate-accurate) and **Pixabay** (Standard mode).
+- **37 SFW themes** plus a **free-text search box** for any query.
+- **Random theme** — in a batch it varies **per video**.
 - **Aspect ratios:** Landscape 16:9, Portrait 9:16, Square 1:1.
-- **Quality:** 480p / 720p / 1080p. Higher-resolution source clips are pulled and **downscaled cleanly (lanczos)** — never upscaled.
-- **Framerate:** 24 / 25 / 30 / 50 / 60 fps. Clips are selected to **match the chosen fps natively** (no fps conversion), then encoded at exactly that rate for smooth, consistent output.
-- **Duration:** 10 s – 10 min.
-- **No repeated footage** — used clip ids are remembered and Pexels pages rotate, so every video (and every clip within a batch) is unique.
+- **Quality:** 480p / 720p / 1080p — higher-res source clips are **downscaled cleanly (lanczos)**, never upscaled.
+- **Framerate:** 24 / 25 / 30 / 50 / 60 fps. On Pexels, clips are chosen to **match the chosen fps natively** (no fps conversion) and are encoded at exactly that rate.
+- **Exact duration** — output is trimmed to precisely the length you set, with **fade in/out** (buffered footage means a failed download never shortens the video).
+- **No repeated footage** across a batch (used-clip memory + page rotation).
+
+### Two modes
+- **Standard** — clean downscale + exact duration + fades (re-encoded, smooth).
+- **Fast (raw)** — pulls clips at the exact selected resolution+fps and joins them via **MPEG-TS concat with no video re-encoding** — dramatically faster, with continuous timestamps and clean boundaries. Ideal when the output will be re-encoded later. (Square not supported.)
 
 ### Batch
-- Generate **1 / 5 / 10 / 15 / 20** videos in a row — each unique (different clips, theme if Random, and music).
+- Generate **1 / 5 / 10 / 15 / 20** videos in a row — each unique.
 - **Results gallery** with per-video preview, individual download, and **Download all**.
-- **Generation time** is shown per video and as a batch total, so you can estimate how long future batches will take.
+- **Generation time** shown per video and as a batch total (clearly labelled as *generation* time, not clip length).
 
 ### Music
-- **Generated (in-browser):** ambient, calm, uplifting, cinematic, lo-fi, electronic, techno, pop, rock, classical + **Random** — real genres with drums & bass, synthesized with the Web Audio API. Unique per video (seed drives key, tempo, progression & notes), royalty-free, and peak-normalized so it's actually audible.
-- **Jamendo (real music):** optional — add a free Jamendo client id in Settings to pull **Creative-Commons instrumental tracks by genre**, downloaded and cut to the video length, non-repeating. Falls back to generated music if unavailable.
-- **Upload your own** track (looped/trimmed to length with a fade-out).
-- Per-source **volume** control. Music is always mixed to the **exact video length**.
+- **Generated (in-browser):** ambient, calm, uplifting, cinematic, lo-fi, electronic, techno, pop, rock, classical + **Random** — real genres with drums & bass, a per-seed melodic motif, phrase structure & fills, and a soft-limiter for consistent, audible loudness. Unique per video, always royalty-free.
+- **Jamendo (real music):** optional client id → Creative-Commons instrumental tracks by genre, **filtered to commercially-usable licenses (CC-BY / CC-BY-SA)**, downloaded and cut to length, non-repeating. When selected it is used **strictly** (never silently swapped for generated).
+- **Upload your own** track. Per-source **volume**; music mixed to the exact length with a fade-out.
 
 ### Quality-of-life
-- **Desktop notification** when a batch finishes — start it, switch tabs, get pinged when it's ready.
-- **Warns before you close the tab** while a generation is running.
-- **Dark / light** theme.
-- **100% client-side** — your API keys and generated videos never leave your device.
+- **Persistent library** — generated videos are saved in your browser (IndexedDB) and survive navigation, reloads and sessions. **Clear cache** button frees space; storage usage is shown.
+- **Activity log** at the bottom — detailed step-by-step events and the exact reason for any failure (including the last ffmpeg lines), copyable.
+- **Desktop notification** when a batch finishes; **warns before closing the tab** mid-generation.
+- **Dark / light** theme. 100% client-side — API keys and videos never leave your device.
 
 ---
 
 ## 🚀 Setup
 
-1. Grab a free API key at [pexels.com/api](https://www.pexels.com/api/).
+1. Grab a free API key at [pexels.com/api](https://www.pexels.com/api/) (and optionally [pixabay.com/api](https://pixabay.com/api/docs/)).
 2. Open the app → **Settings** → paste the key → **Test key**.
-3. *(Optional)* For real music, add a free **Jamendo client id** from [devportal.jamendo.com](https://devportal.jamendo.com/) in Settings.
-4. Pick a theme, ratio, quality, framerate, duration & music → **Generate** → **Download**.
+3. *(Optional)* For real music, add a free **Jamendo Client ID** from [devportal.jamendo.com](https://devportal.jamendo.com/) — only the Client ID is needed, not the Secret.
+4. Pick theme, ratio, quality, framerate, mode, duration & music → **Generate** → **Download**.
 
-> The first generation downloads the ffmpeg engine (~30 MB) once; it's cached afterwards.
-> Big batches, long durations, 60 fps or 1080p take longer to encode in the browser and use more memory — keep the tab open (you'll get a notification when done).
-
----
+> The first generation downloads the ffmpeg engine (~30 MB) once, then it's cached.
+> Long/large/1080p/60fps jobs take a while — try **Fast mode** for a big speed-up. You can switch tabs; you'll get a notification when done (don't close the tab).
 
 ## 🛠️ Local development
 
@@ -63,22 +63,20 @@ npm install
 npm run dev       # Vite dev server
 npm run typecheck # tsc --noEmit
 npm run build     # production build into dist/
-npm run preview   # preview the production build
 ```
 
 ## 📦 Deployment
 
-Every push to `main` triggers `.github/workflows/deploy.yml`, which builds the Vite
-app and publishes `dist/` to GitHub Pages automatically. Pages **Source** must be set
-to **GitHub Actions** once in the repo settings.
+Every push to `main` runs `.github/workflows/deploy.yml`, building the Vite app and
+publishing `dist/` to GitHub Pages. Pages **Source** must be set to **GitHub Actions** once.
 
 ## 🧱 Tech
 
 React + TypeScript · Vite · Tailwind CSS · Radix UI · wouter · ffmpeg.wasm ·
-Web Audio API · Pexels API · Pixabay API · Jamendo API
+Web Audio API · IndexedDB · Pexels API · Pixabay API · Jamendo API
 
 ## 📄 Credits & licensing
 
-- Video clips: [Pexels](https://www.pexels.com/) and [Pixabay](https://pixabay.com/) — royalty-free for commercial use (no attribution required).
-- Jamendo tracks are **Creative Commons** — credit the artists when you publish.
-- Generated music is synthesized locally and royalty-free.
+- Video: [Pexels](https://www.pexels.com/) and [Pixabay](https://pixabay.com/) — royalty-free for commercial use, no attribution required.
+- Jamendo tracks: **commercially-usable Creative Commons** (CC-BY / CC-BY-SA) — credit the artists when you publish.
+- Generated music: synthesized locally, royalty-free.

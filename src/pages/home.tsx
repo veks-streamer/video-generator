@@ -12,6 +12,7 @@ import { OptionSelector } from "@/components/option-selector";
 import { MusicSelector } from "@/components/music-selector";
 import { ProgressPanel } from "@/components/progress-panel";
 import { ResultsGallery } from "@/components/results-gallery";
+import { ActivityLog, type LogEntry, type LogLevel } from "@/components/activity-log";
 import { Play, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge, Layers, Film, Cpu } from "lucide-react";
 import {
   aspectRatios, qualities, framerates, encodingModes, fastStdSize, MODE_FAST,
@@ -94,6 +95,9 @@ export default function Home() {
   const [progress, setProgress] = useState<ProgressUpdate>({ stage: "loading", progress: 0, message: "" });
   const [results, setResults] = useState<VideoResult[]>([]);
   const [usage, setUsage] = useState("");
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const addLog = (level: LogLevel, msg: string) =>
+    setLogs((prev) => [...prev, { t: Date.now(), level, msg }].slice(-500));
 
   const refreshUsage = () => estimateUsage().then(setUsage);
 
@@ -153,6 +157,7 @@ export default function Home() {
       if (!hasJamendoKey()) {
         flags.jamendoFellBack = true;
         flags.jamendoError = "No Jamendo Client ID set — add it in Settings.";
+        addLog("warn", `Video ${index + 1}: Jamendo selected but no Client ID — exported without music.`);
         return { music: null, label: "No music (Jamendo not configured)" };
       }
       try {
@@ -179,6 +184,7 @@ export default function Home() {
             try {
               const bytes = await downloadAudio(url);
               addUsedTrackIds([t.id]);
+              addLog("info", `Video ${index + 1}: Jamendo track “${t.name}” — ${t.artist}`);
               return { music: { bytes, loop: true, volume: vol }, label: `${t.name} — ${t.artist}` };
             } catch (e) {
               lastErr = e instanceof Error ? e.message : String(e);
@@ -190,6 +196,7 @@ export default function Home() {
         // Strict: do NOT generate. Export without music and report why.
         flags.jamendoFellBack = true;
         flags.jamendoError = e instanceof Error ? e.message : String(e);
+        addLog("warn", `Video ${index + 1}: Jamendo unavailable — ${flags.jamendoError} (exported without music)`);
         return { music: null, label: "No music (Jamendo failed)" };
       }
     }
@@ -230,9 +237,11 @@ export default function Home() {
       ? await searchPixabay(query, getPixabayKey(), duration, page, fps, width, height)
       : await searchVideos(query, getPexelsKey(), duration, page, fps, width, height, exact);
     const selected = selectClips(found, Math.ceil(duration * 1.7) + perClipCap, perClipCap, used);
+    addLog("info", `Video ${index + 1}/${total}: “${label}” — ${found.length} found, using ${selected.length} (${width}×${height}@${fps}, ${usePixabay ? "Pixabay" : "Pexels"}${isFast ? ", fast" : ""})`);
     if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
 
     const { music, label: musicLabel } = await resolveMusic(index, duration, onProgress, flags, jamCache);
+    addLog("info", `Video ${index + 1}/${total}: music = ${musicLabel}`);
 
     const { blob, duration: outDur, usedClips } = await generateVideo({
       clips: selected, width, height, crf: quality.crf, fps, perClipCap,
@@ -240,6 +249,7 @@ export default function Home() {
     });
 
     addUsedClipIds(usedClips.map((c) => c.id));
+    addLog("info", `Video ${index + 1}/${total}: done — ${Math.round(outDur)}s in ${formatElapsed(performance.now() - started)}`);
 
     const result: VideoResult = {
       id: `${Date.now()}-${index}`,
@@ -278,6 +288,8 @@ export default function Home() {
     setIsProcessing(true);
 
     const total = count;
+    const themeDesc = customQuery.trim() || (isRandomTheme ? "random" : themeId);
+    addLog("info", `Starting ${total} video(s): theme=${themeDesc}, source=${videoSource}, music=${musicSource}${musicSource === MUSIC_JAMENDO ? "/" + jamGenre : musicSource === "generated" ? "/" + genGenre : ""}, ${duration}s @ ${fpsId}fps, ${qualityId}, ${mode} mode`);
     const failures: string[] = [];
     const flags: RunFlags = { jamendoFellBack: false, jamendoError: "" };
     const jamCache = new Map<string, JamendoTrack[]>();
@@ -293,11 +305,16 @@ export default function Home() {
         console.error(`[generate] video ${i + 1} failed:`, err);
         const msg = err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
         failures.push(`Video ${i + 1}: ${msg}`);
+        addLog("error", `Video ${i + 1}/${total} FAILED: ${msg}`);
+        const flog = getRecentFfmpegLog();
+        if (flog) addLog("error", `ffmpeg: ${flog.split("\n").slice(-3).join(" | ")}`);
       }
     }
 
     setIsProcessing(false);
     refreshUsage();
+    const totalMsAll = performance.now() - batchStart;
+    addLog(failures.length ? "warn" : "info", `Batch finished: ${made}/${total} ok${failures.length ? `, ${failures.length} failed` : ""} in ${formatElapsed(totalMsAll)}`);
 
     if (made === 0) {
       const log = getRecentFfmpegLog();
@@ -428,6 +445,8 @@ export default function Home() {
             <ResultsGallery results={results} usage={usage} onDownload={downloadResult} onDownloadAll={downloadAll} onClear={clearResults} />
           </div>
         </div>
+
+        <ActivityLog logs={logs} onClear={() => setLogs([])} />
       </main>
 
       <ProgressPanel progress={progress} visible={showOverlay} details={errorDetails} onClose={() => setShowOverlay(false)} />
