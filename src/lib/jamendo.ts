@@ -7,7 +7,8 @@ export interface JamendoTrack {
   name: string;
   artist: string;
   duration: number;
-  audio: string; // streamable mp3 url
+  audio: string;         // streamable mp3 url
+  audiodownload?: string; // alternative download url (try if audio is CORS-blocked)
 }
 
 const BASE = "https://api.jamendo.com/v3.0/tracks";
@@ -54,6 +55,7 @@ export async function searchJamendo(
       artist: t.artist_name ?? "Unknown",
       duration: Number(t.duration) || 0,
       audio: t.audio as string,
+      audiodownload: t.audiodownload as string | undefined,
     }));
 }
 

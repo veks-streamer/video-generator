@@ -26,7 +26,7 @@ import {
 import { searchVideos, selectClips } from "@/lib/pexels";
 import { generateVideo, getRecentFfmpegLog } from "@/lib/video-generator";
 import { generateMusic } from "@/lib/music";
-import { searchJamendo, downloadAudio } from "@/lib/jamendo";
+import { searchJamendo, downloadAudio, type JamendoTrack } from "@/lib/jamendo";
 import { saveVideo, getAllVideos, clearVideos, estimateUsage, type StoredVideo } from "@/lib/idb";
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
@@ -129,6 +129,7 @@ export default function Home() {
   async function resolveMusic(
     index: number, targetLen: number,
     onProgress: (p: ProgressUpdate) => void, flags: RunFlags,
+    jamCache: Map<string, JamendoTrack[]>,
   ): Promise<{ music: { bytes: Uint8Array; loop: boolean; volume: number } | null; label: string }> {
     const vol = musicVolume;
     if (musicSource === MUSIC_NONE) return { music: null, label: "No music" };
@@ -147,15 +148,32 @@ export default function Home() {
           const pool = jamendoGenres.filter((g) => g.id !== MUSIC_RANDOM);
           genre = pool[Math.floor(Math.random() * pool.length)].id;
         }
+        // Cache the search per genre for the whole run (fewer API calls, no repeats).
+        let tracks = jamCache.get(genre);
+        if (!tracks) {
+          tracks = await searchJamendo(getJamendoKey(), genre, 200);
+          jamCache.set(genre, tracks);
+        }
         const used = getUsedTrackIds();
-        const tracks = await searchJamendo(getJamendoKey(), genre, 200);
-        const fresh = tracks.filter((t) => !used.has(t.id));
-        const chosen = (fresh.length ? fresh : tracks).sort(() => Math.random() - 0.5)[0];
-        if (!chosen) throw new Error("No commercial-licensed Jamendo tracks for this genre.");
-        onProgress({ stage: "audio", progress: 4, message: `Downloading “${chosen.name}”…` });
-        const bytes = await downloadAudio(chosen.audio);
-        addUsedTrackIds([chosen.id]);
-        return { music: { bytes, loop: true, volume: vol }, label: `${chosen.name} — ${chosen.artist}` };
+        const candidates = [...tracks.filter((t) => !used.has(t.id)), ...tracks].sort(() => Math.random() - 0.5);
+        if (candidates.length === 0) throw new Error("No commercial-licensed Jamendo tracks for this genre.");
+
+        // Try several tracks — some audio URLs may be CORS-blocked; skip to the next.
+        let lastErr = "";
+        for (let a = 0; a < Math.min(6, candidates.length); a++) {
+          const t = candidates[a];
+          onProgress({ stage: "audio", progress: 4, message: `Downloading “${t.name}”…` });
+          for (const url of [t.audio, t.audiodownload].filter(Boolean) as string[]) {
+            try {
+              const bytes = await downloadAudio(url);
+              addUsedTrackIds([t.id]);
+              return { music: { bytes, loop: true, volume: vol }, label: `${t.name} — ${t.artist}` };
+            } catch (e) {
+              lastErr = e instanceof Error ? e.message : String(e);
+            }
+          }
+        }
+        throw new Error(`Couldn't download any Jamendo track (${lastErr || "blocked"}).`);
       } catch (e) {
         flags.jamendoFellBack = true;
         flags.jamendoError = e instanceof Error ? e.message : String(e);
@@ -172,7 +190,7 @@ export default function Home() {
     return { music: { bytes, loop: false, volume: vol }, label: genLabel(genreId) };
   }
 
-  async function generateOne(index: number, total: number, flags: RunFlags): Promise<VideoResult> {
+  async function generateOne(index: number, total: number, flags: RunFlags, jamCache: Map<string, JamendoTrack[]>): Promise<VideoResult> {
     const started = performance.now();
     const prefix = total > 1 ? `Video ${index + 1}/${total} — ` : "";
     const onProgress = (p: ProgressUpdate) => setProgress({ ...p, message: prefix + p.message });
@@ -199,7 +217,7 @@ export default function Home() {
     const selected = selectClips(found, Math.ceil(duration * 1.7) + perClipCap, perClipCap, used);
     if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
 
-    const { music, label: musicLabel } = await resolveMusic(index, duration, onProgress, flags);
+    const { music, label: musicLabel } = await resolveMusic(index, duration, onProgress, flags, jamCache);
 
     const { blob, duration: outDur, usedClips } = await generateVideo({
       clips: selected, width, height, crf: quality.crf, fps, perClipCap,
@@ -247,12 +265,13 @@ export default function Home() {
     const total = count;
     const failures: string[] = [];
     const flags: RunFlags = { jamendoFellBack: false, jamendoError: "" };
+    const jamCache = new Map<string, JamendoTrack[]>();
     let made = 0;
     const batchStart = performance.now();
 
     for (let i = 0; i < total; i++) {
       try {
-        const r = await generateOne(i, total, flags);
+        const r = await generateOne(i, total, flags, jamCache);
         made++;
         setResults((prev) => [r, ...prev]);
       } catch (err) {
