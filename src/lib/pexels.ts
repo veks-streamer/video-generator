@@ -56,7 +56,7 @@ function pickStrictFile(
     if (Math.round(f.fps) !== targetFps) return false;
     if (exact) return f.width === targetW && f.height === targetH; // fast: identical size
     if (f.width < targetW || f.height < targetH) return false;     // standard: must cover target
-    return f.width * f.height <= targetArea * 4;                   // …but skip huge (e.g. 4K) sources
+    return f.width * f.height <= targetArea * 2.25;                // …but skip oversized sources (faster decode)
   });
   if (valid.length === 0) return null;
   valid.sort((a, b) => (a.width! * a.height!) - (b.width! * b.height!));

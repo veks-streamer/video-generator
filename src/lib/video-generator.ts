@@ -36,7 +36,7 @@ const T_FINAL = 300000;  // concat / mux / audio
 // timeout, force-terminates the (stuck) instance so we can recover / fall back.
 async function execWD(ff: FFmpeg, args: string[], base: number): Promise<void> {
   const mtActive = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
-  const ms = mtActive ? Math.min(base, 15000) : base;
+  const ms = mtActive ? 15000 : 900000;
   debugLog?.(`$ ffmpeg ${args.join(" ")}`);
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
@@ -243,8 +243,8 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     try {
       await execWD(ff, [
         "-ss", off, "-i", src, "-t", String(len),
-        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},setsar=1,fps=${fps}${styleVf ? "," + styleVf : ""},format=yuv420p`,
-        "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", out,
+        "-vf", `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=bilinear,crop=${width}:${height},setsar=1,fps=${fps}${styleVf ? "," + styleVf : ""},format=yuv420p`,
+        "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "ultrafast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", out,
       ], T_CLIP);
       segs.push({ file: out, len }); usedClips.push(clip); uniqueLen += len;
     } catch (e) {
@@ -280,7 +280,7 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     if (fin) filters.push(`fade=t=in:st=0:d=${Math.min(FADE_IN, len * 0.5).toFixed(3)}`);
     if (fout) { const fo = Math.min(FADE_OUT, len * 0.6); filters.push(`fade=t=out:st=${Math.max(0, len - fo).toFixed(3)}:d=${fo.toFixed(3)}`); }
     const vf = [...filters, ...parts].join(",");
-    await execWD(ff, ["-i", srcFile, "-t", String(len), "-vf", vf, "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", name], T_CLIP);
+    await execWD(ff, ["-i", srcFile, "-t", String(len), "-vf", vf, "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "ultrafast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", name], T_CLIP);
     return name;
   };
 
