@@ -1,7 +1,7 @@
 {
   "name": "video-generator",
   "private": true,
-  "version": "8.1.0",
+  "version": "8.2.0",
   "type": "module",
   "license": "MIT",
   "description": "Browser-based AI video generator. Builds montages from royalty-free Pexels clips using ffmpeg.wasm. 100% static, runs entirely client-side on GitHub Pages.",

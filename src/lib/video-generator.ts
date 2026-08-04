@@ -245,33 +245,57 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
 async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<GenerateOutput> {
   const { clips, targetDuration, music, onProgress } = opts;
   const usedClips: VideoClip[] = [];
-  const parts: string[] = [];
+  const parts: string[] = []; // .ts segments
   let acc = 0;
   let downloadFailures = 0;
+  let remuxFailures = 0;
 
+  // Remux each clip to MPEG-TS (annexb, video only) WITHOUT re-encoding. TS +
+  // the concat demuxer give continuous timestamps and in-band SPS/PPS at every
+  // boundary, which fixes the freeze/skip and macroblock artifacts you get from
+  // a plain mp4 stream-copy concat.
   for (let i = 0; i < clips.length && acc < targetDuration + 8; i++) {
     const clip = clips[i];
     onProgress({
       stage: "downloading",
-      progress: 8 + Math.min(80, (acc / targetDuration) * 80),
+      progress: 8 + Math.min(78, (acc / targetDuration) * 78),
       message: `Fast mode — fetching footage… ${Math.round(acc)}s / ${Math.round(targetDuration)}s`,
     });
+
+    const mp4 = `f${i}.mp4`;
+    const ts = `f${i}.ts`;
     try {
       const data = await fetchClip(clip.url);
-      const name = `f${i}.mp4`;
-      await ff.writeFile(name, data);
-      parts.push(name);
-      usedClips.push(clip);
-      acc += Math.min(clip.duration, opts.perClipCap * 3); // fast mode uses whole clips
+      await ff.writeFile(mp4, data);
     } catch (e) {
       downloadFailures++;
       pushLog(`fast download failed for clip ${clip.id}: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+    try {
+      await ff.exec([
+        "-i", mp4,
+        "-map", "0:v:0",
+        "-c", "copy",
+        "-bsf:v", "h264_mp4toannexb",
+        "-f", "mpegts",
+        "-y", ts,
+      ]);
+      parts.push(ts);
+      usedClips.push(clip);
+      acc += Math.min(clip.duration, 60);
+    } catch (e) {
+      remuxFailures++;
+      pushLog(`fast remux failed for clip ${clip.id}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      await ff.deleteFile(mp4).catch(() => {});
     }
   }
 
   if (parts.length === 0) {
     throw new Error(
-      `All clip downloads were blocked (${downloadFailures}) — likely a network/CORS issue reaching the Pexels CDN.`,
+      `Fast mode couldn't prepare any clips (${downloadFailures} download, ${remuxFailures} remux failures). ` +
+        `The footage may not be H.264 — try Standard mode.`,
     );
   }
 
@@ -284,13 +308,16 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
   let outputName = "video.mp4";
   try {
     await ff.exec([
+      "-fflags", "+genpts",
       "-f", "concat", "-safe", "0", "-i", "concat.txt",
       "-t", String(realDuration),
-      "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4",
+      "-c", "copy",
+      "-avoid_negative_ts", "make_zero",
+      "-movflags", "+faststart", "-y", "video.mp4",
     ]);
   } catch (e) {
     throw new Error(
-      "Fast mode couldn't join these clips without re-encoding (incompatible streams). Try Standard mode.",
+      "Fast mode couldn't join these clips (incompatible H.264 parameters). Try Standard mode.",
     );
   }
 
