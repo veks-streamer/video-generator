@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Terminal, ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type LogLevel = "info" | "warn" | "error";
+export type LogLevel = "info" | "warn" | "error" | "debug";
 export interface LogEntry { t: number; level: LogLevel; msg: string }
 
 interface Props {
   logs: LogEntry[];
+  debug: boolean;
+  onToggleDebug: (v: boolean) => void;
   onClear: () => void;
 }
 
@@ -17,9 +19,10 @@ const color: Record<LogLevel, string> = {
   info: "text-muted-foreground",
   warn: "text-amber-600 dark:text-amber-500",
   error: "text-destructive",
+  debug: "text-muted-foreground/60",
 };
 
-export function ActivityLog({ logs, onClear }: Props) {
+export function ActivityLog({ logs, debug, onToggleDebug, onClear }: Props) {
   const [open, setOpen] = useState(true);
   const bodyRef = useRef<HTMLDivElement>(null);
   const errors = logs.filter((l) => l.level === "error").length;
@@ -43,7 +46,14 @@ export function ActivityLog({ logs, onClear }: Props) {
           {warns > 0 && <Badge variant="secondary" className="text-[10px]">{warns} warning{warns > 1 ? "s" : ""}</Badge>}
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onToggleDebug(!debug)}
+            title="Debug mode — log every ffmpeg command and engine line"
+            className={cn("text-[11px] px-2 py-1 rounded-md border mr-1", debug ? "bg-primary/15 border-primary/40 text-primary" : "text-muted-foreground")}
+          >
+            Debug {debug ? "on" : "off"}
+          </button>
           <Button size="sm" variant="ghost" onClick={copy} title="Copy log"><Copy className="h-4 w-4" /></Button>
           <Button size="sm" variant="ghost" onClick={onClear} title="Clear log"><Trash2 className="h-4 w-4" /></Button>
         </div>

@@ -14,9 +14,12 @@ let mtDisabled = false; // set if the multi-thread core fails; fall back to sing
 // Ring buffer of the most recent ffmpeg log lines, surfaced on error so
 // failures are actually diagnosable in the UI/console.
 const recentLogs: string[] = [];
+let debugLog: ((msg: string) => void) | null = null;
+export function setDebugLogger(fn: ((msg: string) => void) | null) { debugLog = fn; }
 function pushLog(line: string) {
   recentLogs.push(line);
   if (recentLogs.length > 25) recentLogs.shift();
+  try { debugLog?.(line); } catch { /* */ }
 }
 export function getRecentFfmpegLog(): string {
   return recentLogs.slice(-8).join("\n");
@@ -26,6 +29,29 @@ export function getRecentFfmpegLog(): string {
 // deadlock under Turbo) fails instead of freezing the UI forever.
 const T_CLIP = 60000;    // per-clip encode / remux (short: catches a stuck mt core fast)
 const T_FINAL = 300000;  // concat / mux / audio
+
+// JS-side watchdog around ffmpeg.exec. ffmpeg's own timeout runs INSIDE the wasm
+// loop, so a multi-thread pthread deadlock (which hangs before the loop starts)
+// would never trigger it. This races the exec against a real timer and, on
+// timeout, force-terminates the (stuck) instance so we can recover / fall back.
+async function execWD(ff: FFmpeg, args: string[], base: number): Promise<void> {
+  const mtActive = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
+  const ms = mtActive ? Math.min(base, 28000) : base;
+  debugLog?.(`$ ffmpeg ${args.join(" ")}`);
+  let timer: ReturnType<typeof setTimeout>;
+  const guard = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`ffmpeg timed out after ${Math.round(ms / 1000)}s (engine stuck)`)), ms);
+  });
+  try {
+    await Promise.race([ff.exec(args), guard]);
+  } catch (e) {
+    try { ff.terminate(); } catch { /* */ }
+    if (ffmpeg === ff) { ffmpeg = null; loadPromise = null; }
+    throw e;
+  } finally {
+    clearTimeout(timer!);
+  }
+}
 
 async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg) return ffmpeg;
@@ -57,6 +83,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
           wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
         });
       }
+      debugLog?.(`ffmpeg core loaded: ${mt ? "multi-thread (Turbo)" : "single-thread"}`);
       ffmpeg = instance;
       return instance;
     } catch (e) {
@@ -131,7 +158,7 @@ async function writeMusic(ff: FFmpeg, parts: Uint8Array[]): Promise<string | nul
   const chain = names.map((_, i) => `[a${i}]`).join("");
   const fc = `${pre};${chain}concat=n=${names.length}:v=0:a=1[a]`;
   try {
-    await ff.exec([...inputs, "-filter_complex", fc, "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-y", "music_cat.m4a"], T_FINAL);
+    await execWD(ff, [...inputs, "-filter_complex", fc, "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-y", "music_cat.m4a"], T_FINAL);
     for (const n of names) await ff.deleteFile(n).catch(() => {});
     return "music_cat.m4a";
   } catch (e) {
@@ -152,7 +179,7 @@ async function muxMusic(
   const fo = Math.min(FADE_OUT, realDuration * 0.6);
   const af = `volume=${vol},afade=t=in:st=0:d=0.5,afade=t=out:st=${Math.max(0, realDuration - fo).toFixed(3)}:d=${fo.toFixed(3)}`;
   try {
-    await ff.exec([
+    await execWD(ff, [
       "-i", videoFile,
       ...(music.loop ? ["-stream_loop", "-1"] : []),
       "-i", mfile,
@@ -205,7 +232,7 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     const clip = clips[i];
     onProgress({ stage: "downloading", progress: 10 + (uniqueLen / targetDuration) * 60, message: `Fetching footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     let data: Uint8Array;
-    try { data = await fetchClip(clip.url); } catch (e) { downloadFailures++; pushLog(`download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
+    try { data = await fetchClip(clip.url); debugLog?.(`clip ${clip.id}: ${(data.length/1048576).toFixed(1)}MB ${clip.url}`); } catch (e) { downloadFailures++; pushLog(`download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     const src = `s${i}.mp4`, out = `n${i}.mp4`;
     const cut = varyCuts ? 2.5 + Math.random() * Math.max(0.5, perClipCap - 2.5) : perClipCap;
     const len = Math.min(clip.duration, cut);
@@ -214,11 +241,11 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     await ff.writeFile(src, data);
     onProgress({ stage: "encoding", progress: 10 + (uniqueLen / targetDuration) * 60, message: `Processing footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     try {
-      await ff.exec([
+      await execWD(ff, [
         "-ss", off, "-i", src, "-t", String(len),
         "-vf", `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},setsar=1,fps=${fps}${styleVf ? "," + styleVf : ""},format=yuv420p`,
         "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", out,
-      ]);
+      ], T_CLIP);
       segs.push({ file: out, len }); usedClips.push(clip); uniqueLen += len;
     } catch (e) { encodeFailures++; lastErr = e instanceof Error ? e.message : String(e); }
     finally { await ff.deleteFile(src).catch(() => {}); }
@@ -250,7 +277,7 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     if (fin) filters.push(`fade=t=in:st=0:d=${Math.min(FADE_IN, len * 0.5).toFixed(3)}`);
     if (fout) { const fo = Math.min(FADE_OUT, len * 0.6); filters.push(`fade=t=out:st=${Math.max(0, len - fo).toFixed(3)}:d=${fo.toFixed(3)}`); }
     const vf = [...filters, ...parts].join(",");
-    await ff.exec(["-i", srcFile, "-t", String(len), "-vf", vf, "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", name], T_CLIP);
+    await execWD(ff, ["-i", srcFile, "-t", String(len), "-vf", vf, "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", name], T_CLIP);
     return name;
   };
 
@@ -265,7 +292,7 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
 
   const list = order.map((o) => `file '${o.file}'`).join("\n");
   await ff.writeFile("concat.txt", new TextEncoder().encode(list));
-  await ff.exec(["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4"], T_FINAL);
+  await execWD(ff, ["-f", "concat", "-safe", "0", "-i", "concat.txt", "-c", "copy", "-movflags", "+faststart", "-y", "video.mp4"], T_FINAL);
 
   let outputName = "video.mp4";
   if (music) { onProgress({ stage: "audio", progress: 92, message: "Mixing music…" }); outputName = await muxMusic(ff, "video.mp4", music, realDuration); }
@@ -294,14 +321,14 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     const clip = clips[i];
     onProgress({ stage: "downloading", progress: 8 + Math.min(78, (uniqueLen / targetDuration) * 78), message: `Fast mode — fetching footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     const mp4 = `f${i}.mp4`, ts = `f${i}.ts`;
-    try { await ff.writeFile(mp4, await fetchClip(clip.url)); }
+    try { const d = await fetchClip(clip.url); debugLog?.(`clip ${clip.id}: ${(d.length/1048576).toFixed(1)}MB ${clip.url}`); await ff.writeFile(mp4, d); }
     catch (e) { downloadFailures++; pushLog(`fast download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     // Random keyframe start so repeated footage differs between videos. Input -ss
     // with copy snaps to a keyframe, so the segment stays clean.
     const off = (Math.random() * Math.max(0, Math.min(clip.duration * 0.4, clip.duration - 3))).toFixed(2);
     const segLen = Math.max(1, clip.duration - Number(off));
     try {
-      await ff.exec(["-ss", off, "-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts], T_CLIP);
+      await execWD(ff, ["-ss", off, "-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts], T_CLIP);
       parts.push({ ts, len: segLen }); usedClips.push(clip); uniqueLen += segLen;
     } catch (e) { remuxFailures++; pushLog(`fast remux failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); }
     finally { await ff.deleteFile(mp4).catch(() => {}); }
@@ -321,7 +348,7 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
   const list = order.map((f) => `file '${f}'`).join("\n");
   await ff.writeFile("concat.txt", new TextEncoder().encode(list));
   try {
-    await ff.exec(["-fflags", "+genpts", "-f", "concat", "-safe", "0", "-i", "concat.txt", "-t", String(realDuration), "-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-y", "video.mp4"], T_FINAL);
+    await execWD(ff, ["-fflags", "+genpts", "-f", "concat", "-safe", "0", "-i", "concat.txt", "-t", String(realDuration), "-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", "-y", "video.mp4"], T_FINAL);
   } catch (e) {
     throw new Error("Fast mode couldn't join these clips (incompatible H.264 parameters). Try Standard mode.");
   }

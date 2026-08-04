@@ -27,7 +27,7 @@ import {
 } from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
 import { searchPixabay } from "@/lib/pixabay";
-import { generateVideo, getRecentFfmpegLog } from "@/lib/video-generator";
+import { generateVideo, getRecentFfmpegLog, setDebugLogger } from "@/lib/video-generator";
 import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio } from "@/lib/jamendo";
 import { saveVideo, getAllVideos, clearVideos, estimateUsage, type StoredVideo } from "@/lib/idb";
@@ -102,6 +102,7 @@ export default function Home() {
   const [usage, setUsage] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [queueView, setQueueView] = useState<Job[]>([]);
+  const [debug, setDebug] = useState(false);
 
   const queueRef = useRef<Job[]>([]);
   const runningRef = useRef(false);
@@ -110,6 +111,10 @@ export default function Home() {
   const refreshUsage = () => estimateUsage().then(setUsage);
 
   useEffect(() => { getAllVideos().then((l) => setResults(l.map(storedToResult))).catch(() => {}); refreshUsage(); }, []);
+  useEffect(() => {
+    setDebugLogger(debug ? (m) => setLogs((prev) => [...prev, { t: Date.now(), level: "debug" as LogLevel, msg: m }].slice(-1500)) : null);
+    return () => setDebugLogger(null);
+  }, [debug]);
   useEffect(() => {
     const onFocus = () => { setKeyReady(hasPexelsKey()); setJamReady(hasJamendoKey()); setPixReady(hasPixabayKey()); };
     window.addEventListener("focus", onFocus);
@@ -528,7 +533,7 @@ export default function Home() {
           </div>
         </div>
 
-        <ActivityLog logs={logs} onClear={() => setLogs([])} />
+        <ActivityLog logs={logs} debug={debug} onToggleDebug={setDebug} onClear={() => setLogs([])} />
       </main>
 
       <ProgressPanel progress={progress} visible={showOverlay && !minimized} details={errorDetails} queueCount={pendingAfterCurrent} onClose={() => setShowOverlay(false)} onMinimize={() => setMinimized(true)} />
