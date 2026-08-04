@@ -140,14 +140,14 @@ export default function Home() {
   async function resolveMusic(
     s: Snap, index: number, targetLen: number,
     onProgress: (p: ProgressUpdate) => void, flags: RunFlags, jamCache: Map<string, any[]>,
-  ): Promise<{ music: { bytes: Uint8Array; loop: boolean; volume: number } | null; label: string }> {
+  ): Promise<{ music: { parts: Uint8Array[]; loop: boolean; volume: number } | null; label: string }> {
     const vol = s.musicVolume;
     if (s.musicSource === MUSIC_NONE) return { music: null, label: "No music" };
 
     if (s.musicSource === MUSIC_UPLOAD) {
       if (!s.musicFile) return { music: null, label: "No music" };
       const bytes = new Uint8Array(await s.musicFile.arrayBuffer());
-      return { music: { bytes, loop: true, volume: vol }, label: s.musicFile.name };
+      return { music: { parts: [bytes], loop: true, volume: vol }, label: s.musicFile.name };
     }
 
     if (s.musicSource === MUSIC_JAMENDO) {
@@ -163,9 +163,15 @@ export default function Home() {
         ? shuffle(all)
         : [s.jamGenre, ...shuffle(all.filter((g) => g !== s.jamGenre))];
       const used = getUsedTrackIds();
+      const localUsed = new Set<string>();
       let lastErr = "";
-      onProgress({ stage: "audio", progress: 3, message: "Finding a Jamendo track…" });
+      const parts: Uint8Array[] = [];
+      const names: string[] = [];
+      let sumDur = 0;
+      onProgress({ stage: "audio", progress: 3, message: "Finding Jamendo tracks…" });
+
       for (const genre of order) {
+        if (sumDur >= targetLen) break;
         let tracks = jamCache.get(genre);
         if (tracks === undefined) {
           try { tracks = await searchJamendo(getJamendoKey(), genre, 200); }
@@ -174,30 +180,41 @@ export default function Home() {
         }
         if (!tracks.length) continue;
         const candidates = [...tracks.filter((t: any) => !used.has(t.id)), ...tracks].sort(() => Math.random() - 0.5);
-        for (let a = 0; a < Math.min(8, candidates.length); a++) {
-          const t = candidates[a];
+        for (const t of candidates) {
+          if (sumDur >= targetLen || parts.length >= 20) break;
+          if (localUsed.has(t.id)) continue;
           onProgress({ stage: "audio", progress: 4, message: `Downloading “${t.name}”…` });
+          let ok = false;
           for (const url of [t.audio, t.audiodownload].filter(Boolean) as string[]) {
             try {
               const bytes = await downloadAudio(url);
-              addUsedTrackIds([t.id]);
-              addLog("info", `Video ${index + 1}: Jamendo “${t.name}” — ${t.artist} [${genre}]`);
-              return { music: { bytes, loop: true, volume: vol }, label: `${t.name} — ${t.artist}` };
+              parts.push(bytes); names.push(`${t.name} — ${t.artist}`);
+              localUsed.add(t.id); addUsedTrackIds([t.id]);
+              sumDur += Number(t.duration) || 0; ok = true;
+              addLog("info", `Video ${index + 1}: Jamendo “${t.name}” — ${t.artist} [${genre}]${sumDur < targetLen ? ` (${Math.round(sumDur)}s / ${Math.round(targetLen)}s)` : ""}`);
+              break;
             } catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
           }
+          if (ok && sumDur >= targetLen) break;
         }
       }
-      flags.jamendoFellBack = true;
-      flags.jamendoError = lastErr || "No commercial-licensed tracks available in any genre.";
-      addLog("warn", `Video ${index + 1}: Jamendo — ${flags.jamendoError} (no music)`);
-      return { music: null, label: "No music (Jamendo)" };
+
+      if (parts.length === 0) {
+        flags.jamendoFellBack = true;
+        flags.jamendoError = lastErr || "No commercial-licensed tracks available in any genre.";
+        addLog("warn", `Video ${index + 1}: Jamendo — ${flags.jamendoError} (no music)`);
+        return { music: null, label: "No music (Jamendo)" };
+      }
+      const label = names.length > 1 ? `${names[0]} (+${names.length - 1} more)` : names[0];
+      // loop only if we still couldn't gather enough to cover the video
+      return { music: { parts, loop: sumDur < targetLen, volume: vol }, label };
     }
 
     // Generated
     onProgress({ stage: "audio", progress: 3, message: "Composing background music…" });
     const seed = (Date.now() ^ (index * 2654435761) ^ Math.floor(Math.random() * 1e9)) >>> 0;
     const { bytes, genreId } = await generateMusic(s.genGenre, seed, targetLen);
-    return { music: { bytes, loop: false, volume: vol }, label: genLabel(genreId) };
+    return { music: { parts: [bytes], loop: false, volume: vol }, label: genLabel(genreId) };
   }
 
   async function generateOne(s: Snap, index: number, total: number, flags: RunFlags, jamCache: Map<string, any[]>): Promise<VideoResult> {
