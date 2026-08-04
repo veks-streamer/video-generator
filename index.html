@@ -7,6 +7,18 @@
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="apple-touch-icon" href="favicon.svg" />
     <meta name="theme-color" content="#3b82f6" />
+    <script>
+      // Turbo mode (opt-in): register the COOP/COEP service worker so the
+      // multi-threaded ffmpeg core can use SharedArrayBuffer. Safe default off.
+      try {
+        if (localStorage.getItem("vg.turbo") === "1") {
+          window.coi = { coepCredentialless: function () { return true; }, quiet: true };
+          var sc = document.createElement("script");
+          sc.src = "coi-serviceworker.js";
+          document.head.appendChild(sc);
+        }
+      } catch (e) {}
+    </script>
     <title>Video Generator — browser video montages</title>
     <meta name="description" content="Create video montages in your browser from royalty-free Pexels clips. 100% client-side, powered by ffmpeg.wasm." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

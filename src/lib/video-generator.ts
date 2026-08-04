@@ -35,10 +35,22 @@ async function getFFmpeg(): Promise<FFmpeg> {
       // Cache-bust the unhashed core files so a new deploy never serves a
       // stale engine from the browser cache.
       const v = `?v=${SHORT_SHA}`;
-      await instance.load({
-        coreURL: `${CORE_BASE}/ffmpeg-core.js${v}`,
-        wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
-      });
+      // Use the multi-threaded core when the page is cross-origin isolated
+      // (Turbo mode enabled the COOP/COEP service worker). Much faster; falls
+      // back to the single-threaded core otherwise.
+      const mt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true;
+      if (mt) {
+        await instance.load({
+          coreURL: `${CORE_BASE}/mt/ffmpeg-core.js${v}`,
+          wasmURL: `${CORE_BASE}/mt/ffmpeg-core.wasm${v}`,
+          workerURL: `${CORE_BASE}/mt/ffmpeg-core.worker.js${v}`,
+        });
+      } else {
+        await instance.load({
+          coreURL: `${CORE_BASE}/ffmpeg-core.js${v}`,
+          wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
+        });
+      }
       ffmpeg = instance;
       return instance;
     } catch (e) {
