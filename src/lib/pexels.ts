@@ -50,12 +50,13 @@ function pickStrictFile(
   targetH: number,
   exact: boolean,
 ): { url: string; width: number; height: number; fps: number } | null {
+  const targetArea = targetW * targetH;
   const valid = v.video_files.filter((f) => {
     if (f.file_type !== "video/mp4" || !f.link || !f.width || !f.height || f.fps == null) return false;
     if (Math.round(f.fps) !== targetFps) return false;
-    return exact
-      ? f.width === targetW && f.height === targetH   // fast mode: identical size (no scaling)
-      : f.width >= targetW && f.height >= targetH;     // standard: >= target (clean downscale)
+    if (exact) return f.width === targetW && f.height === targetH; // fast: identical size
+    if (f.width < targetW || f.height < targetH) return false;     // standard: must cover target
+    return f.width * f.height <= targetArea * 4;                   // …but skip huge (e.g. 4K) sources
   });
   if (valid.length === 0) return null;
   valid.sort((a, b) => (a.width! * a.height!) - (b.width! * b.height!));

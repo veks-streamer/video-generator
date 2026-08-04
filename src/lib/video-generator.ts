@@ -36,7 +36,7 @@ const T_FINAL = 300000;  // concat / mux / audio
 // timeout, force-terminates the (stuck) instance so we can recover / fall back.
 async function execWD(ff: FFmpeg, args: string[], base: number): Promise<void> {
   const mtActive = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
-  const ms = mtActive ? Math.min(base, 28000) : base;
+  const ms = mtActive ? Math.min(base, 15000) : base;
   debugLog?.(`$ ffmpeg ${args.join(" ")}`);
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
@@ -247,7 +247,10 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
         "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", out,
       ], T_CLIP);
       segs.push({ file: out, len }); usedClips.push(clip); uniqueLen += len;
-    } catch (e) { encodeFailures++; lastErr = e instanceof Error ? e.message : String(e); }
+    } catch (e) {
+      encodeFailures++; lastErr = e instanceof Error ? e.message : String(e);
+      if (!ffmpeg) throw e; // watchdog killed the engine → abort so we can fall back
+    }
     finally { await ff.deleteFile(src).catch(() => {}); }
   }
 
@@ -330,7 +333,10 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     try {
       await execWD(ff, ["-ss", off, "-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts], T_CLIP);
       parts.push({ ts, len: segLen }); usedClips.push(clip); uniqueLen += segLen;
-    } catch (e) { remuxFailures++; pushLog(`fast remux failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); }
+    } catch (e) {
+      remuxFailures++; pushLog(`fast remux failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`);
+      if (!ffmpeg) throw e; // watchdog killed the engine → abort so we can fall back
+    }
     finally { await ff.deleteFile(mp4).catch(() => {}); }
   }
 
