@@ -16,7 +16,8 @@ The exact deployed build (commit + run #) is shown on a ribbon at the top of the
 ## ✨ Features
 
 ### Video
-- **37 SFW themes** (nature, ocean, city, space, forest, sunset, travel, food, sport…) **plus a free-text search box** for any Pexels query.
+- **Two video sources:** Pexels (native-fps accurate) and Pixabay (Standard mode) — both royalty-free for commercial use.
+- **37 SFW themes** (nature, ocean, city, space, forest, sunset, travel, food, sport…) **plus a free-text search box**.
 - **Random theme** — picks one for you; in a batch it varies **per video**.
 - **Aspect ratios:** Landscape 16:9, Portrait 9:16, Square 1:1.
 - **Quality:** 480p / 720p / 1080p. Higher-resolution source clips are pulled and **downscaled cleanly (lanczos)** — never upscaled.
@@ -74,10 +75,10 @@ to **GitHub Actions** once in the repo settings.
 ## 🧱 Tech
 
 React + TypeScript · Vite · Tailwind CSS · Radix UI · wouter · ffmpeg.wasm ·
-Web Audio API · Pexels API · Jamendo API
+Web Audio API · Pexels API · Pixabay API · Jamendo API
 
 ## 📄 Credits & licensing
 
-- Video clips: [Pexels](https://www.pexels.com/) and its contributors.
+- Video clips: [Pexels](https://www.pexels.com/) and [Pixabay](https://pixabay.com/) — royalty-free for commercial use (no attribution required).
 - Jamendo tracks are **Creative Commons** — credit the artists when you publish.
 - Generated music is synthesized locally and royalty-free.

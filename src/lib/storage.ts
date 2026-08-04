@@ -99,3 +99,13 @@ export function addUsedTrackIds(ids: string[]): void {
     localStorage.setItem(USED_TRACKS_KEY, JSON.stringify(arr));
   } catch { /* */ }
 }
+
+// ---- Pixabay (optional second video source) ----
+const PIXABAY_KEY = "vg.pixabayApiKey";
+export function getPixabayKey(): string {
+  try { return localStorage.getItem(PIXABAY_KEY) ?? ""; } catch { return ""; }
+}
+export function setPixabayKey(key: string): void {
+  try { if (key) localStorage.setItem(PIXABAY_KEY, key.trim()); else localStorage.removeItem(PIXABAY_KEY); } catch { /* */ }
+}
+export function hasPixabayKey(): boolean { return getPixabayKey().length > 0; }

@@ -15,6 +15,7 @@ import { ResultsGallery } from "@/components/results-gallery";
 import { Play, Sparkles, Video, Settings, AlertTriangle, Ratio, Gauge, Layers, Film, Cpu } from "lucide-react";
 import {
   aspectRatios, qualities, framerates, encodingModes, fastStdSize, MODE_FAST,
+  videoSources, VSOURCE_PIXABAY,
   themes, randomTheme, RANDOM_THEME_ID, formatElapsed,
   generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_JAMENDO, MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
@@ -22,8 +23,10 @@ import type { ProgressUpdate, VideoResult, Theme } from "@/lib/constants";
 import {
   hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage,
   getJamendoKey, hasJamendoKey, getUsedTrackIds, addUsedTrackIds,
+  getPixabayKey, hasPixabayKey,
 } from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
+import { searchPixabay } from "@/lib/pixabay";
 import { generateVideo, getRecentFfmpegLog } from "@/lib/video-generator";
 import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio, type JamendoTrack } from "@/lib/jamendo";
@@ -67,6 +70,7 @@ export default function Home() {
   const { toast } = useToast();
   const [keyReady, setKeyReady] = useState(hasPexelsKey());
   const [jamReady, setJamReady] = useState(hasJamendoKey());
+  const [pixReady, setPixReady] = useState(hasPixabayKey());
 
   const [themeId, setThemeId] = useState<string | null>("nature");
   const [customQuery, setCustomQuery] = useState("");
@@ -74,6 +78,7 @@ export default function Home() {
   const [qualityId, setQualityId] = useState("balanced");
   const [fpsId, setFpsId] = useState("30");
   const [mode, setMode] = useState("standard");
+  const [videoSource, setVideoSource] = useState("pexels");
   const [duration, setDuration] = useState(30);
   const [batch, setBatch] = useState("1");
 
@@ -99,7 +104,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const onFocus = () => { setKeyReady(hasPexelsKey()); setJamReady(hasJamendoKey()); };
+    const onFocus = () => { setKeyReady(hasPexelsKey()); setJamReady(hasJamendoKey()); setPixReady(hasPixabayKey()); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
@@ -111,9 +116,11 @@ export default function Home() {
     return () => window.removeEventListener("beforeunload", h);
   }, [isProcessing]);
 
+  const usePixabay = videoSource === VSOURCE_PIXABAY;
+  const sourceReady = usePixabay ? pixReady : keyReady;
   const isRandomTheme = themeId === RANDOM_THEME_ID && !customQuery.trim();
   const hasTheme = customQuery.trim().length > 0 || !!themeId;
-  const canGenerate = keyReady && hasTheme && !isProcessing;
+  const canGenerate = sourceReady && hasTheme && !isProcessing;
   const count = parseInt(batch, 10) || 1;
   const isFast = mode === MODE_FAST;
   const fastSquareBlocked = isFast && aspectId === "square";
@@ -212,11 +219,16 @@ export default function Home() {
       width = even(aspect.width * quality.scale); height = even(aspect.height * quality.scale); exact = false;
     }
 
+    if (usePixabay && isFast) throw new Error("Pixabay works in Standard mode only (framerate isn't guaranteed native). Use Pexels for Fast mode.");
+    if (usePixabay && !hasPixabayKey()) throw new Error("Add your Pixabay API key in Settings to use Pixabay.");
+
     const { query, label } = pickTheme();
-    onProgress({ stage: "searching", progress: 2, message: `Searching “${label}” (${width}×${height} @ ${fps}fps)…` });
+    onProgress({ stage: "searching", progress: 2, message: `Searching ${usePixabay ? "Pixabay" : "Pexels"} “${label}” (${width}×${height} @ ${fps}fps)…` });
     const page = nextQueryPage(query);
     const used = getUsedClipIds();
-    const found = await searchVideos(query, getPexelsKey(), duration, page, fps, width, height, exact);
+    const found = usePixabay
+      ? await searchPixabay(query, getPixabayKey(), duration, page, fps, width, height)
+      : await searchVideos(query, getPexelsKey(), duration, page, fps, width, height, exact);
     const selected = selectClips(found, Math.ceil(duration * 1.7) + perClipCap, perClipCap, used);
     if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
 
@@ -342,12 +354,12 @@ export default function Home() {
       </header>
 
       <main className="container mx-auto max-w-7xl px-4 py-8">
-        {!keyReady && (
+        {!sourceReady && (
           <Alert className="mb-6">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Add your Pexels API key</AlertTitle>
+            <AlertTitle>Add your {usePixabay ? "Pixabay" : "Pexels"} API key</AlertTitle>
             <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
-              <span>A free Pexels API key is needed to fetch clips. It's stored only in your browser.</span>
+              <span>A free {usePixabay ? "Pixabay" : "Pexels"} API key is needed to fetch clips. It's stored only in your browser.</span>
               <Link href="/settings"><Button variant="outline" size="sm">Open Settings</Button></Link>
             </AlertDescription>
           </Alert>
@@ -375,6 +387,13 @@ export default function Home() {
                 <OptionSelector label="Quality" labelIcon={Gauge} items={qualities.map((q) => ({ id: q.id, label: q.label, icon: Gauge }))} value={qualityId} onChange={setQualityId} />
                 <Separator />
                 <OptionSelector label="Framerate" labelIcon={Film} items={framerates} value={fpsId} onChange={setFpsId} />
+                <Separator />
+                <OptionSelector label="Video source" labelIcon={Video} items={videoSources} value={videoSource} onChange={setVideoSource} />
+                {usePixabay && (
+                  <p className="text-xs text-muted-foreground -mt-4">
+                    Pixabay is royalty-free for commercial use (no attribution). It doesn't expose framerate, so it runs in <strong>Standard mode only</strong> and is re-encoded to your chosen fps. For guaranteed native fps / Fast mode, use Pexels.
+                  </p>
+                )}
                 <Separator />
                 <OptionSelector label="Mode" labelIcon={Cpu} items={encodingModes} value={mode} onChange={setMode} />
                 {isFast && (

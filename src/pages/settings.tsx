@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio } from "lucide-react";
-import { getPexelsKey, setPexelsKey, getJamendoKey, setJamendoKey } from "@/lib/storage";
+import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera } from "lucide-react";
+import { getPexelsKey, setPexelsKey, getJamendoKey, setJamendoKey, getPixabayKey, setPixabayKey } from "@/lib/storage";
 import { searchVideos } from "@/lib/pexels";
+import { searchPixabay } from "@/lib/pixabay";
 import { searchJamendo } from "@/lib/jamendo";
 
 export default function Settings() {
@@ -45,6 +46,30 @@ export default function Settings() {
       toast({ title: "Jamendo test failed", description: e instanceof Error ? e.message : "Could not reach Jamendo.", variant: "destructive" });
     } finally {
       setJamTesting(false);
+    }
+  }
+
+  const [pixKey, setPixKey] = useState(getPixabayKey());
+  const [pixTesting, setPixTesting] = useState(false);
+  const [pixStatus, setPixStatus] = useState<"unknown" | "ok" | "bad">(getPixabayKey() ? "unknown" : "bad");
+  function savePix() {
+    setPixabayKey(pixKey);
+    setPixStatus(pixKey ? "unknown" : "bad");
+    toast({ title: "Saved", description: "Your Pixabay API key is stored in this browser." });
+  }
+  async function testPix() {
+    if (!pixKey.trim()) return;
+    setPixTesting(true);
+    try {
+      setPixabayKey(pixKey);
+      await searchPixabay("nature", pixKey.trim(), 10, 1, 30, 1280, 720);
+      setPixStatus("ok");
+      toast({ title: "Pixabay works", description: "API key accepted." });
+    } catch (e) {
+      setPixStatus("bad");
+      toast({ title: "Pixabay test failed", description: e instanceof Error ? e.message : "Could not reach Pixabay.", variant: "destructive" });
+    } finally {
+      setPixTesting(false);
     }
   }
 
@@ -140,6 +165,39 @@ export default function Settings() {
                 className="text-primary hover:underline inline-flex items-center gap-1"
               >
                 pexels.com/api <ExternalLink className="h-3 w-3" />
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5" /> Pixabay API key
+              {pixStatus === "ok" && (<Badge className="bg-green-600 dark:bg-green-700 ml-1"><CheckCircle2 className="h-3 w-3 mr-1" /> Working</Badge>)}
+              {pixStatus === "bad" && (<Badge variant="secondary" className="ml-1"><XCircle className="h-3 w-3 mr-1" /> Not set</Badge>)}
+            </CardTitle>
+            <CardDescription>
+              Optional second video source. Pixabay clips are royalty-free for commercial use with no attribution.
+              (Framerate isn't provided by Pixabay, so its clips run in Standard mode and are re-encoded to your chosen fps.)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="pixabay">API key</Label>
+              <Input id="pixabay" type="password" placeholder="Paste your Pixabay API key" value={pixKey} onChange={(e) => setPixKey(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={savePix}><Save className="h-4 w-4 mr-2" /> Save</Button>
+              <Button variant="outline" onClick={testPix} disabled={!pixKey.trim() || pixTesting}>
+                {pixTesting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Test key
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Get a free key at{" "}
+              <a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                pixabay.com/api <ExternalLink className="h-3 w-3" />
               </a>
             </p>
           </CardContent>

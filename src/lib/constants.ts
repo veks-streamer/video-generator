@@ -115,6 +115,14 @@ export const encodingModes: EncodingMode[] = [
   { id: MODE_FAST, label: "Fast (raw)", icon: Zap },
 ];
 
+export interface VideoSource { id: string; label: string; icon: LucideIcon; }
+export const VSOURCE_PEXELS = "pexels";
+export const VSOURCE_PIXABAY = "pixabay";
+export const videoSources: VideoSource[] = [
+  { id: VSOURCE_PEXELS, label: "Pexels", icon: Film },
+  { id: VSOURCE_PIXABAY, label: "Pixabay", icon: Camera },
+];
+
 /**
  * Fast mode joins clips WITHOUT re-encoding, so every clip must share the exact
  * same dimensions. Snap the quality+aspect to a real Pexels render size. Returns
