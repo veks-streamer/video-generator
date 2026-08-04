@@ -31,6 +31,7 @@ import { generateVideo, getRecentFfmpegLog, setDebugLogger } from "@/lib/video-g
 import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio } from "@/lib/jamendo";
 import { saveVideo, getAllVideos, clearVideos, estimateUsage, type StoredVideo } from "@/lib/idb";
+import SettingsPage from "@/pages/settings";
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 const shuffle = <T,>(a: T[]) => [...a].sort(() => Math.random() - 0.5);
@@ -103,6 +104,7 @@ export default function Home() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [queueView, setQueueView] = useState<Job[]>([]);
   const [debug, setDebug] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const queueRef = useRef<Job[]>([]);
   const runningRef = useRef(false);
@@ -444,7 +446,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/settings"><Button variant="ghost" size="icon" aria-label="Settings"><Settings className="h-5 w-5" /></Button></Link>
+            <Button variant="ghost" size="icon" aria-label="Settings" onClick={() => setSettingsOpen(true)}><Settings className="h-5 w-5" /></Button>
             <ThemeToggle />
           </div>
         </div>
@@ -457,7 +459,7 @@ export default function Home() {
             <AlertTitle>Add your {usePixabay ? "Pixabay" : "Pexels"} API key</AlertTitle>
             <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
               <span>A free {usePixabay ? "Pixabay" : "Pexels"} API key is needed to fetch clips. It's stored only in your browser.</span>
-              <Link href="/settings"><Button variant="outline" size="sm">Open Settings</Button></Link>
+              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>Open Settings</Button>
             </AlertDescription>
           </Alert>
         )}
@@ -496,7 +498,7 @@ export default function Home() {
                 <Separator />
                 <DurationSlider value={duration} onChange={setDuration} min={10} max={600} step={5} />
                 <Separator />
-                <MusicSelector source={musicSource} genGenre={genGenre} jamGenre={jamGenre} jamendoReady={jamReady} file={musicFile} volume={musicVolume} onSource={setMusicSource} onGenGenre={setGenGenre} onJamGenre={setJamGenre} onFile={setMusicFile} onVolume={setMusicVolume} />
+                <MusicSelector source={musicSource} genGenre={genGenre} jamGenre={jamGenre} jamendoReady={jamReady} file={musicFile} volume={musicVolume} onSource={setMusicSource} onGenGenre={setGenGenre} onJamGenre={setJamGenre} onFile={setMusicFile} onVolume={setMusicVolume} onOpenSettings={() => setSettingsOpen(true)} />
 
                 {isHeavy && (<p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />Big/long/1080p/60fps jobs take a while. Try <strong>Fast mode</strong>. You can queue more and switch tabs — you'll get a notification. Don't close the tab.</p>)}
 
@@ -537,6 +539,10 @@ export default function Home() {
       </main>
 
       <ProgressPanel progress={progress} visible={showOverlay && !minimized} details={errorDetails} queueCount={pendingAfterCurrent} onClose={() => setShowOverlay(false)} onMinimize={() => setMinimized(true)} />
+
+      {settingsOpen && (
+        <SettingsPage onClose={() => { setSettingsOpen(false); setKeyReady(hasPexelsKey()); setJamReady(hasJamendoKey()); setPixReady(hasPixabayKey()); }} />
+      )}
 
       {processing && minimized && (
         <button

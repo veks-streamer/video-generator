@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { BUILD_LABEL } from "@/version";
 import Home from "@/pages/home";
-import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 export default function App() {
@@ -18,7 +17,6 @@ export default function App() {
         <Router hook={useHashLocation}>
           <Switch>
             <Route path="/" component={Home} />
-            <Route path="/settings" component={Settings} />
             <Route component={NotFound} />
           </Switch>
         </Router>

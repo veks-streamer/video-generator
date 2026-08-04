@@ -21,6 +21,7 @@ interface Props {
   onJamGenre: (g: string) => void;
   onFile: (f: File | null) => void;
   onVolume: (v: number) => void;
+  onOpenSettings?: () => void;
 }
 
 export function MusicSelector(p: Props) {
@@ -100,7 +101,7 @@ export function MusicSelector(p: Props) {
               <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <span>
                 Jamendo needs a free client id.{" "}
-                <Link href="/settings" className="underline">Add it in Settings</Link>. Until then, Generated music is used as a fallback.
+                <button type="button" className="underline" onClick={() => p.onOpenSettings?.()}>Add it in Settings</button>. Until then, no music is used.
               </span>
             </div>
           )}

@@ -14,7 +14,7 @@ import { searchVideos } from "@/lib/pexels";
 import { searchPixabay } from "@/lib/pixabay";
 import { searchJamendo } from "@/lib/jamendo";
 
-export default function Settings() {
+export default function Settings({ onClose }: { onClose?: () => void } = {}) {
   const { toast } = useToast();
   const [key, setKey] = useState(getPexelsKey());
   const [testing, setTesting] = useState(false);
@@ -114,15 +114,19 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={onClose ? "fixed inset-0 z-50 overflow-y-auto bg-background" : "min-h-screen bg-background"}>
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4 px-4 mx-auto max-w-3xl">
           <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon" aria-label="Back">
+            {onClose ? (
+              <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-            </Link>
+            ) : (
+              <Link href="/">
+                <Button variant="ghost" size="icon" aria-label="Back"><ArrowLeft className="h-5 w-5" /></Button>
+              </Link>
+            )}
             <h1 className="text-xl font-semibold">Settings</h1>
           </div>
           <ThemeToggle />
