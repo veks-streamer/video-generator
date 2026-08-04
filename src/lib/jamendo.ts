@@ -45,9 +45,6 @@ export async function searchJamendo(
     return u.includes("/by/") || u.includes("/by-sa/");        // BY or BY-SA allow commercial + editing
   };
   const commercial = results.filter((t) => t.audio && commercialOk(t.license_ccurl));
-  if (results.length > 0 && commercial.length === 0) {
-    throw new Error("Jamendo returned tracks, but none with a commercial license (CC-BY/BY-SA) for this genre. Try another genre.");
-  }
   return commercial
     .map((t) => ({
       id: String(t.id),

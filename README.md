@@ -39,6 +39,8 @@ The exact deployed build (commit + run #) is shown on a ribbon at the top of the
 - **Upload your own** track. Per-source **volume**; music mixed to the exact length with a fade-out.
 
 ### Quality-of-life
+- **Job queue** — keep adding jobs (different durations, themes, settings) while others run; they process one after another without interrupting.
+- **Minimizable progress** — shrink the progress popup to a corner pill and keep watching the activity log while videos generate.
 - **Persistent library** — generated videos are saved in your browser (IndexedDB) and survive navigation, reloads and sessions. **Clear cache** button frees space; storage usage is shown.
 - **Activity log** at the bottom — detailed step-by-step events and the exact reason for any failure (including the last ffmpeg lines), copyable.
 - **Desktop notification** when a batch finishes; **warns before closing the tab** mid-generation.

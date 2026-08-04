@@ -1,7 +1,7 @@
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, AlertCircle, X } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, X, Minimize2 } from "lucide-react";
 import type { ProgressUpdate } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -9,17 +9,24 @@ interface Props {
   progress: ProgressUpdate;
   visible: boolean;
   details?: string;
+  queueCount?: number;
   onClose?: () => void;
+  onMinimize?: () => void;
 }
 
-export function ProgressPanel({ progress, visible, details, onClose }: Props) {
+export function ProgressPanel({ progress, visible, details, queueCount = 0, onClose, onMinimize }: Props) {
   if (!visible) return null;
   const isError = progress.stage === "error";
   const isDone = progress.stage === "complete";
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md relative">
+        {!isError && onMinimize && (
+          <Button variant="ghost" size="icon" className="absolute right-2 top-2" onClick={onMinimize} title="Minimize (keep generating)">
+            <Minimize2 className="h-4 w-4" />
+          </Button>
+        )}
         <CardContent className="pt-6 space-y-6">
           <div className="flex flex-col items-center text-center space-y-4">
             <div className={cn("p-4 rounded-full", isError ? "bg-destructive/10" : "bg-primary/10")}>
@@ -55,6 +62,11 @@ export function ProgressPanel({ progress, visible, details, onClose }: Props) {
               {progress.currentStep && progress.totalSteps && (
                 <p className="text-xs text-center text-muted-foreground">
                   Clip {progress.currentStep} of {progress.totalSteps}
+                </p>
+              )}
+              {queueCount > 0 && (
+                <p className="text-xs text-center text-muted-foreground">
+                  {queueCount} more job{queueCount > 1 ? "s" : ""} queued
                 </p>
               )}
             </div>
