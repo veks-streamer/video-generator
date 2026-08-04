@@ -45,6 +45,14 @@ const batchCounts = [
 
 const genLabel = (id: string) => generativeGenres.find((g) => g.id === id)?.label ?? id;
 
+interface Preset { id: string; label: string; aspect: string; quality: string; fps: string; mode: string; duration: number; style: string; }
+const PRESETS: Preset[] = [
+  { id: "reels", label: "Reels / TikTok", aspect: "portrait", quality: "balanced", fps: "30", mode: "standard", duration: 30, style: "vibrant" },
+  { id: "cinematic", label: "Cinematic", aspect: "landscape", quality: "hd", fps: "24", mode: "standard", duration: 60, style: "cinematic" },
+  { id: "square", label: "Square post", aspect: "square", quality: "balanced", fps: "30", mode: "standard", duration: 15, style: "warm" },
+  { id: "quick", label: "Quick (raw)", aspect: "landscape", quality: "hd", fps: "30", mode: "fast", duration: 60, style: "none" },
+];
+
 function notify(title: string, body: string) {
   try { if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body }); } catch { /* */ }
 }
@@ -131,6 +139,12 @@ export default function Home() {
     const fps = framerates.find((f) => f.id === s.fpsId)?.fps ?? s.fpsId;
     return `${s.count}× ${t} · ${s.duration}s · ${fps}fps · ${s.qualityId} · ${s.mode}`;
   }
+  function applyPreset(p: Preset) {
+    setAspectId(p.aspect); setQualityId(p.quality); setFpsId(p.fps);
+    setMode(p.mode); setDuration(p.duration); setStyle(p.style);
+    toast({ title: `Preset: ${p.label}`, description: "Settings applied — tweak anything you like." });
+  }
+
   function pickTheme(s: Snap): { query: string; label: string } {
     if (s.customQuery.trim()) return { query: s.customQuery.trim(), label: s.customQuery.trim() };
     const t = s.themeId === RANDOM_THEME_ID ? randomTheme() : (themes.find((x) => x.id === s.themeId) as Theme);
@@ -451,6 +465,11 @@ export default function Home() {
                 <p className="text-muted-foreground text-sm">Clips are fetched from Pexels/Pixabay and assembled locally. Queue as many jobs as you like — they run one after another.</p>
               </CardHeader>
               <CardContent className="space-y-8">
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <Button key={p.id} type="button" variant="outline" size="sm" onClick={() => applyPreset(p)}>{p.label}</Button>
+                  ))}
+                </div>
                 <ThemeSelector themeId={themeId} customQuery={customQuery} onSelectTheme={(id) => { setThemeId(id); setCustomQuery(""); }} onCustomQuery={setCustomQuery} />
                 <Separator />
                 <OptionSelector label="How many videos" labelIcon={Layers} items={batchCounts} value={batch} onChange={setBatch} />

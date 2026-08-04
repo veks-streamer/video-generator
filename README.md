@@ -23,6 +23,9 @@ The exact deployed build (commit + run #) is shown on a ribbon at the top of the
 - **Framerate:** 24 / 25 / 30 / 50 / 60 fps. On Pexels, clips are chosen to **match the chosen fps natively** (no fps conversion) and are encoded at exactly that rate.
 - **Exact duration** — output is trimmed to precisely the length you set, with **fade in/out** (buffered footage means a failed download never shortens the video).
 - **No repeated footage** across a batch (used-clip memory + page rotation).
+- **Uniqueness engine:** multi-keyword themes (each theme rotates 4–5 search queries), random per-clip seek + randomized cut lengths, so the same theme yields visibly different videos every render.
+- **Look/Style grades:** Cinematic, Vibrant, Warm, Cool, Vintage, Noir B&W, and **Auto** (a different look per video).
+- **Quick presets:** Reels/TikTok, Cinematic, Square post, Quick (raw).
 
 ### Two modes
 - **Standard** — clean downscale + exact duration + fades (re-encoded, smooth).
@@ -41,6 +44,8 @@ The exact deployed build (commit + run #) is shown on a ribbon at the top of the
 ### Quality-of-life
 - **Job queue** — keep adding jobs (different durations, themes, settings) while others run; they process one after another without interrupting.
 - **Minimizable progress** — shrink the progress popup to a corner pill and keep watching the activity log while videos generate.
+- **Turbo mode (opt-in)** — multi-threaded ffmpeg via a COOP/COEP service worker for much faster encoding (Settings).
+- **Installable (PWA)** — add it to your desktop/phone home screen.
 - **Persistent library** — generated videos are saved in your browser (IndexedDB) and survive navigation, reloads and sessions. **Clear cache** button frees space; storage usage is shown.
 - **Activity log** at the bottom — detailed step-by-step events and the exact reason for any failure (including the last ffmpeg lines), copyable.
 - **Desktop notification** when a batch finishes; **warns before closing the tab** mid-generation.
