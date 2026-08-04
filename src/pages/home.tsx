@@ -19,7 +19,7 @@ import {
   videoSources, VSOURCE_PIXABAY, themes, randomTheme, RANDOM_THEME_ID, formatElapsed,
   generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_JAMENDO, MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
-import type { ProgressUpdate, VideoResult, Theme } from "@/lib/constants";
+import type { ProgressUpdate, VideoResult, Theme, VideoClip } from "@/lib/constants";
 import {
   hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage,
   getJamendoKey, hasJamendoKey, getUsedTrackIds, addUsedTrackIds,
@@ -224,23 +224,57 @@ export default function Home() {
     if (pix && fast) throw new Error("Pixabay works in Standard mode only. Use Pexels for Fast mode.");
     if (pix && !hasPixabayKey()) throw new Error("Add your Pixabay API key in Settings to use Pixabay.");
 
-    const { query, label } = pickTheme(s);
-    onProgress({ stage: "searching", progress: 2, message: `Searching ${pix ? "Pixabay" : "Pexels"} “${label}” (${width}×${height} @ ${fps}fps)…` });
-    const page = nextQueryPage(query);
-    const used = getUsedClipIds();
-    const found = pix
-      ? await searchPixabay(query, getPixabayKey(), s.duration, page, fps, width, height)
-      : await searchVideos(query, getPexelsKey(), s.duration, page, fps, width, height, exact);
-    const selected = selectClips(found, Math.ceil(s.duration * 1.7) + perClipCap, perClipCap, used);
-    addLog("info", `Video ${index + 1}/${total}: “${label}” — ${found.length} found, using ${selected.length} (${width}×${height}@${fps}, ${pix ? "Pixabay" : "Pexels"}${fast ? ", fast" : ""})`);
-    if (selected.length === 0) throw new Error(`No usable clips for “${label}”.`);
+    // Search with automatic retry: for a Random theme, if a theme has no clips at
+    // the exact size/fps, switch to a different random theme and try again.
+    const isRandom = !s.customQuery.trim() && s.themeId === RANDOM_THEME_ID;
+    let query = "", label = "";
+    let selected: VideoClip[] = [];
+    const maxTries = isRandom ? 6 : 1;
+    for (let attempt = 0; attempt < maxTries; attempt++) {
+      const t = pickTheme(s);
+      query = t.query; label = t.label;
+      onProgress({ stage: "searching", progress: 2, message: `Searching ${pix ? "Pixabay" : "Pexels"} “${label}” (${width}×${height} @ ${fps}fps)…` });
+      const page = nextQueryPage(query);
+      const used = getUsedClipIds();
+      try {
+        const found = pix
+          ? await searchPixabay(query, getPixabayKey(), s.duration, page, fps, width, height)
+          : await searchVideos(query, getPexelsKey(), s.duration, page, fps, width, height, exact);
+        const sel = selectClips(found, Math.ceil(s.duration * 1.7) + perClipCap, perClipCap, used);
+        addLog("info", `Video ${index + 1}/${total}: “${label}” — ${found.length} found, using ${sel.length} (${width}×${height}@${fps}, ${pix ? "Pixabay" : "Pexels"}${fast ? ", fast" : ""})`);
+        if (sel.length > 0) { selected = sel; break; }
+        throw new Error(`No usable clips for “${label}”.`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (isRandom && attempt < maxTries - 1) {
+          addLog("warn", `Video ${index + 1}/${total}: “${label}” unavailable — trying another theme…`);
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (selected.length === 0) throw new Error(`No clips found (tried ${maxTries} theme${maxTries > 1 ? "s" : ""}).`);
 
     const { music, label: musicLabel } = await resolveMusic(s, index, s.duration, onProgress, flags, jamCache);
     addLog("info", `Video ${index + 1}/${total}: music = ${musicLabel}`);
 
-    const { blob, duration: outDur, usedClips } = await generateVideo({
-      clips: selected, width, height, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast, music, onProgress,
-    });
+    let blob: Blob, outDur: number, usedClips: VideoClip[];
+    try {
+      const r = await generateVideo({ clips: selected, width, height, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast, music, onProgress });
+      blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // If Fast mode can't join/prepare these clips, fall back to Standard (re-encode).
+      if (fast && /couldn't (join|prepare)/i.test(msg)) {
+        addLog("warn", `Video ${index + 1}/${total}: Fast mode failed (${msg}) — retrying in Standard mode…`);
+        const sw = even(aspect.width * quality.scale);
+        const sh = even(aspect.height * quality.scale);
+        const r = await generateVideo({ clips: selected, width: sw, height: sh, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast: false, music, onProgress });
+        blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
+      } else {
+        throw e;
+      }
+    }
     addUsedClipIds(usedClips.map((c) => c.id));
     addLog("info", `Video ${index + 1}/${total}: done — ${Math.round(outDur)}s in ${formatElapsed(performance.now() - started)}`);
 

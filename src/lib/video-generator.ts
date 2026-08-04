@@ -54,6 +54,18 @@ async function getFFmpeg(): Promise<FFmpeg> {
   return loadPromise;
 }
 
+/**
+ * Tear down the current ffmpeg instance so the next call starts with a fresh
+ * WASM heap + MEMFS. ffmpeg.wasm has a bounded heap and a crash ("Aborted()" /
+ * "memory access out of bounds") leaves the instance permanently dead, so we
+ * recreate it per video to isolate memory and recover from any crash.
+ */
+export async function resetFFmpeg(): Promise<void> {
+  try { if (ffmpeg) ffmpeg.terminate(); } catch { /* */ }
+  ffmpeg = null;
+  loadPromise = null;
+}
+
 export interface GenerateOptions {
   clips: VideoClip[];
   width: number;
@@ -84,6 +96,7 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
   const { clips, width, height, crf, fps, perClipCap, targetDuration, fast, music, onProgress } = opts;
 
   onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
+  await resetFFmpeg(); // fresh heap per video — prevents cross-video OOM cascades
   const ff = await getFFmpeg();
 
   if (fast) return generateFast(ff, opts);
