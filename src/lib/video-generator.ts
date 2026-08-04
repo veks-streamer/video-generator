@@ -172,11 +172,13 @@ export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutp
     try { data = await fetchClip(clip.url); } catch (e) { downloadFailures++; pushLog(`download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     const src = `s${i}.mp4`, out = `n${i}.mp4`;
     const len = Math.min(clip.duration, perClipCap);
+    // Random window inside the clip so the same footage looks different each run.
+    const off = (Math.random() * Math.max(0, clip.duration - len)).toFixed(2);
     await ff.writeFile(src, data);
     onProgress({ stage: "encoding", progress: 10 + (uniqueLen / targetDuration) * 60, message: `Processing footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     try {
       await ff.exec([
-        "-i", src, "-t", String(len),
+        "-ss", off, "-i", src, "-t", String(len),
         "-vf", `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},setsar=1,fps=${fps},format=yuv420p`,
         "-an", "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", String(crf), "-pix_fmt", "yuv420p", "-y", out,
       ]);
@@ -257,9 +259,13 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     const mp4 = `f${i}.mp4`, ts = `f${i}.ts`;
     try { await ff.writeFile(mp4, await fetchClip(clip.url)); }
     catch (e) { downloadFailures++; pushLog(`fast download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
+    // Random keyframe start so repeated footage differs between videos. Input -ss
+    // with copy snaps to a keyframe, so the segment stays clean.
+    const off = (Math.random() * Math.max(0, Math.min(clip.duration * 0.4, clip.duration - 3))).toFixed(2);
+    const segLen = Math.max(1, clip.duration - Number(off));
     try {
-      await ff.exec(["-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts]);
-      parts.push({ ts, len: Math.min(clip.duration, 60) }); usedClips.push(clip); uniqueLen += Math.min(clip.duration, 60);
+      await ff.exec(["-ss", off, "-i", mp4, "-map", "0:v:0", "-c", "copy", "-bsf:v", "h264_mp4toannexb", "-f", "mpegts", "-y", ts]);
+      parts.push({ ts, len: segLen }); usedClips.push(clip); uniqueLen += segLen;
     } catch (e) { remuxFailures++; pushLog(`fast remux failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); }
     finally { await ff.deleteFile(mp4).catch(() => {}); }
   }

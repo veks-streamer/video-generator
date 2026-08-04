@@ -279,6 +279,10 @@ export default function Home() {
       }
     }
     if (selected.length === 0) throw new Error(`No clips found (tried ${maxTries} theme${maxTries > 1 ? "s" : ""}).`);
+    const uDur = selected.reduce((a, c) => a + Math.min(c.duration, perClipCap), 0);
+    if (uDur < s.duration * 0.5) {
+      addLog("warn", `Video ${index + 1}/${total}: only ~${Math.round(uDur)}s unique footage for “${label}” — clips repeat (random seek adds variety). For more clips try 30fps or a broader keyword.`);
+    }
 
     const { music, label: musicLabel } = await resolveMusic(s, index, s.duration, onProgress, flags, jamCache);
     addLog("info", `Video ${index + 1}/${total}: music = ${musicLabel}`);
