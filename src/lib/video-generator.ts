@@ -195,6 +195,27 @@ async function muxMusic(
   }
 }
 
+/** Add background music to an already-encoded (e.g. WebCodecs HW) video via a
+ * cheap ffmpeg copy-mux. Returns the muxed mp4 bytes. */
+export async function addMusicToVideo(
+  videoBytes: Uint8Array,
+  music: { parts: Uint8Array[]; loop: boolean; volume: number } | null,
+  duration: number,
+): Promise<Uint8Array> {
+  await resetFFmpeg();
+  const ff = await getFFmpeg();
+  await ff.writeFile("hwvideo.mp4", videoBytes);
+  let out = "hwvideo.mp4";
+  if (music) out = await muxMusic(ff, "hwvideo.mp4", music, duration);
+  const data = (await ff.readFile(out)) as Uint8Array;
+  const bytes = new Uint8Array(data);
+  await ff.deleteFile("hwvideo.mp4").catch(() => {});
+  await ff.deleteFile("final.mp4").catch(() => {});
+  await ff.deleteFile("music_in").catch(() => {});
+  await ff.deleteFile("music_cat.m4a").catch(() => {});
+  return bytes;
+}
+
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
   opts.onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
   const usedMt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;

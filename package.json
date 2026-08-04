@@ -1,7 +1,7 @@
 {
   "name": "video-generator",
   "private": true,
-  "version": "11.6.0",
+  "version": "12.0.0",
   "type": "module",
   "license": "MIT",
   "description": "Browser-based AI video generator. Builds montages from royalty-free Pexels clips using ffmpeg.wasm. 100% static, runs entirely client-side on GitHub Pages.",
@@ -26,6 +26,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.453.0",
+    "mp4-muxer": "^5.2.2",
+    "mp4box": "^0.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.6.0",

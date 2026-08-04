@@ -27,7 +27,8 @@ import {
 } from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
 import { searchPixabay } from "@/lib/pixabay";
-import { generateVideo, getRecentFfmpegLog, setDebugLogger } from "@/lib/video-generator";
+import { generateVideo, getRecentFfmpegLog, setDebugLogger, addMusicToVideo } from "@/lib/video-generator";
+import { hwEncodeVideo, hwSupported } from "@/lib/hw-encode";
 import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio } from "@/lib/jamendo";
 import { saveVideo, getAllVideos, clearVideos, estimateUsage, type StoredVideo } from "@/lib/idb";
@@ -65,7 +66,7 @@ function storedToResult(s: StoredVideo): VideoResult {
 interface Snap {
   themeId: string | null; customQuery: string;
   aspectId: string; qualityId: string; fpsId: string; mode: string; duration: number;
-  videoSource: string; style: string; musicSource: string; genGenre: string; jamGenre: string;
+  videoSource: string; style: string; hw: boolean; musicSource: string; genGenre: string; jamGenre: string;
   musicFile: File | null; musicVolume: number; count: number;
 }
 interface Job { id: string; label: string; snap: Snap }
@@ -139,7 +140,8 @@ export default function Home() {
   const isHeavy = !isFast && (duration > 180 || qualityId === "hd" || fpsId === "60" || count >= 10);
 
   function currentSnap(): Snap {
-    return { themeId, customQuery, aspectId, qualityId, fpsId, mode, duration, videoSource, style, musicSource, genGenre, jamGenre, musicFile, musicVolume, count };
+    let hw = false; try { hw = localStorage.getItem("vg.hw") === "1"; } catch { /* */ }
+    return { themeId, customQuery, aspectId, qualityId, fpsId, mode, duration, videoSource, style, hw, musicSource, genGenre, jamGenre, musicFile, musicVolume, count };
   }
   function describe(s: Snap): string {
     const t = s.customQuery.trim() || (s.themeId === RANDOM_THEME_ID ? "random" : s.themeId);
@@ -313,9 +315,25 @@ export default function Home() {
     const { music, label: musicLabel } = await resolveMusic(s, index, s.duration, onProgress, flags, jamCache);
     addLog("info", `Video ${index + 1}/${total}: music = ${musicLabel}`);
 
-    let blob: Blob, outDur: number, usedClips: VideoClip[];
+    let blob: Blob | null = null, outDur = 0, usedClips: VideoClip[] = [];
     let usedW = width, usedH = height, usedFast = fast;
-    try {
+
+    // Hardware (WebCodecs) path first when enabled & supported (Standard only).
+    if (s.hw && !fast && hwSupported()) {
+      try {
+        onProgress({ stage: "loading", progress: 2, message: "Starting hardware encoder…" });
+        const r = await hwEncodeVideo({ clips: selected, width, height, fps, targetDuration: s.duration, perClipCap, varyCuts: true, styleId: s.style, onProgress });
+        let bytes = r.bytes;
+        if (music) { onProgress({ stage: "audio", progress: 96, message: "Adding music…" }); bytes = await addMusicToVideo(bytes, music, r.duration); }
+        blob = new Blob([bytes as unknown as BlobPart], { type: "video/mp4" }); outDur = r.duration; usedClips = r.usedClips; usedFast = false;
+        addLog("info", `Video ${index + 1}/${total}: hardware-encoded (WebCodecs), ${Math.round(outDur)}s`);
+      } catch (e) {
+        addLog("warn", `Video ${index + 1}/${total}: HW encoder failed (${e instanceof Error ? e.message : String(e)}) — using ffmpeg`);
+        blob = null;
+      }
+    }
+
+    if (!blob) try {
       const r = await generateVideo({ clips: selected, width, height, crf: quality.crf, fps, perClipCap, targetDuration: s.duration, fast, styleVf: fast ? null : vf, varyCuts: !fast, music, onProgress });
       blob = r.blob; outDur = r.duration; usedClips = r.usedClips;
     } catch (e) {

@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera, Zap } from "lucide-react";
+import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera, Zap, Cpu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { hwSupported } from "@/lib/hw-encode";
 import { getPexelsKey, setPexelsKey, getJamendoKey, setJamendoKey, getPixabayKey, setPixabayKey } from "@/lib/storage";
 import { searchVideos } from "@/lib/pexels";
 import { searchPixabay } from "@/lib/pixabay";
@@ -85,6 +86,14 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
     }
     toast({ title: v ? "Turbo enabling…" : "Turbo disabling…", description: "Reloading to apply." });
     setTimeout(() => window.location.reload(), 800);
+  }
+
+  const [hw, setHw] = useState(() => { try { return localStorage.getItem("vg.hw") === "1"; } catch { return false; } });
+  const hwOk = hwSupported();
+  function toggleHw(v: boolean) {
+    setHw(v);
+    try { if (v) localStorage.setItem("vg.hw", "1"); else localStorage.removeItem("vg.hw"); } catch { /* */ }
+    toast({ title: v ? "Hardware encoder on" : "Hardware encoder off", description: "Applies to your next Standard render." });
   }
 
   function save() {
@@ -266,6 +275,30 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
                 devportal.jamendo.com <ExternalLink className="h-3 w-3" />
               </a>. Only commercially-usable licenses (CC-BY / CC-BY-SA) are selected — still credit the artists when you publish.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5" /> Hardware encoder (experimental)
+              {hw && hwOk && (<Badge className="bg-green-600 dark:bg-green-700 ml-1"><CheckCircle2 className="h-3 w-3 mr-1" /> On</Badge>)}
+              {!hwOk && (<Badge variant="secondary" className="ml-1">Not supported</Badge>)}
+            </CardTitle>
+            <CardDescription>
+              Uses your GPU/hardware H.264 encoder via WebCodecs — dramatically faster than the software engine for
+              Standard renders. Experimental: if anything fails, it automatically falls back to the software engine.
+              (Standard mode only; Fast mode already skips encoding.)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-sm">
+                <p className="font-medium">Enable hardware encoder</p>
+                <p className="text-muted-foreground text-xs">{hwOk ? "Supported in this browser." : "Your browser doesn't support WebCodecs video encoding."}</p>
+              </div>
+              <Switch checked={hw && hwOk} disabled={!hwOk} onCheckedChange={toggleHw} aria-label="Toggle hardware encoder" />
+            </div>
           </CardContent>
         </Card>
 
