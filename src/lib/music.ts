@@ -1,6 +1,7 @@
 // Generative background music, synthesized in the browser with the Web Audio
-// API. No external files or keys, always royalty-free & SFW. The seed drives
-// key, tempo, progression and note choices so every track is clearly different.
+// API. Royalty-free & SFW, unique per seed. A soft-limiter guarantees a
+// consistent, audible level (no more "just noise"), and a motif + phrase
+// structure make each track more musical and varied.
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -28,22 +29,22 @@ interface Cfg {
   bass: { type: Wave; pattern: "sustain" | "root" | "eighths" | "offbeat"; gain: number } | null;
   lead: { type: Wave; density: number; octave: number; gain: number } | null;
   pad: { type: Wave; gain: number } | null;
-  cutoff: number;
+  cutoff: number; swing: number;
   progs: number[][];
 }
 
 const GENRES: Record<string, Cfg> = {
-  ambient:   { scale: SCALES.minor,  root: 48, bpm: [60, 70],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: null, pad: { type: "sine", gain: 0.5 }, cutoff: 1200, progs: [[0,5,3,4],[0,3,4,3]] },
-  calm:      { scale: SCALES.penta,  root: 50, bpm: [70, 84],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "triangle", density: 0.35, octave: 1, gain: 0.4 }, pad: { type: "sine", gain: 0.45 }, cutoff: 1900, progs: [[0,3,1,4],[0,4,5,3]] },
-  uplifting: { scale: SCALES.major,  root: 52, bpm: [102, 120],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.6, octave: 1, gain: 0.45 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2800, progs: [[0,4,5,3],[0,5,3,4],[3,4,0,5]] },
-  cinematic: { scale: SCALES.minor,  root: 45, bpm: [70, 92],  drums: "ambient",  bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: null, pad: { type: "sine", gain: 0.5 }, cutoff: 1500, progs: [[0,5,3,4],[0,3,5,4]] },
-  lofi:      { scale: SCALES.dorian, root: 48, bpm: [72, 86],  drums: "backbeat", bass: { type: "triangle", pattern: "offbeat", gain: 0.5 }, lead: { type: "sine", density: 0.35, octave: 1, gain: 0.35 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 1200, progs: [[0,3,4,1],[0,4,3,5]] },
-  electronic:{ scale: SCALES.minor,  root: 48, bpm: [118, 126],drums: "four",     bass: { type: "sawtooth", pattern: "offbeat", gain: 0.5 }, lead: { type: "sawtooth", density: 0.6, octave: 1, gain: 0.4 }, pad: { type: "sawtooth", gain: 0.25 }, cutoff: 2600, progs: [[0,0,5,3],[0,3,4,4]] },
-  techno:    { scale: SCALES.minor,  root: 45, bpm: [126, 132],drums: "four",     bass: { type: "sawtooth", pattern: "root", gain: 0.55 }, lead: { type: "square", density: 0.5, octave: 1, gain: 0.32 }, pad: null, cutoff: 2200, progs: [[0,0,0,3],[0,0,5,5]] },
-  pop:       { scale: SCALES.major,  root: 50, bpm: [100, 116],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.6, octave: 1, gain: 0.45 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2700, progs: [[0,4,5,3],[5,3,0,4]] },
-  rock:      { scale: SCALES.minor,  root: 40, bpm: [120, 140],drums: "rock",     bass: { type: "square", pattern: "eighths", gain: 0.5 }, lead: { type: "square", density: 0.4, octave: 1, gain: 0.3 }, pad: { type: "square", gain: 0.22 }, cutoff: 2000, progs: [[0,0,3,4],[0,5,3,4]] },
-  classical: { scale: SCALES.major,  root: 52, bpm: [80, 100], drums: "none",     bass: { type: "triangle", pattern: "root", gain: 0.45 }, lead: { type: "triangle", density: 0.85, octave: 1, gain: 0.4 }, pad: { type: "triangle", gain: 0.35 }, cutoff: 2400, progs: [[0,4,5,3],[0,3,4,5]] },
-  deep:      { scale: SCALES.minor,  root: 38, bpm: [60, 72],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: null, pad: { type: "sine", gain: 0.5 }, cutoff: 800, progs: [[0,0,3,4]] },
+  ambient:   { scale: SCALES.minor,  root: 48, bpm: [60, 72],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "sine", density: 0.25, octave: 1, gain: 0.3 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1300, swing: 0, progs: [[0,5,3,4],[0,3,4,3],[0,4,5,3],[5,3,4,0]] },
+  calm:      { scale: SCALES.penta,  root: 50, bpm: [72, 88],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "triangle", density: 0.45, octave: 1, gain: 0.42 }, pad: { type: "sine", gain: 0.45 }, cutoff: 2000, swing: 0.1, progs: [[0,3,1,4],[0,4,3,1],[0,2,4,3],[3,4,0,2]] },
+  uplifting: { scale: SCALES.major,  root: 52, bpm: [104, 124],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.7, octave: 1, gain: 0.5 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 3000, swing: 0, progs: [[0,4,5,3],[0,5,3,4],[3,4,0,5],[0,3,4,5],[5,4,0,3]] },
+  cinematic: { scale: SCALES.minor,  root: 45, bpm: [72, 96],  drums: "ambient",  bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: { type: "triangle", density: 0.35, octave: 1, gain: 0.35 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1600, swing: 0, progs: [[0,5,3,4],[0,3,5,4],[0,6,5,4],[5,3,0,4]] },
+  lofi:      { scale: SCALES.dorian, root: 48, bpm: [72, 88],  drums: "backbeat", bass: { type: "triangle", pattern: "offbeat", gain: 0.5 }, lead: { type: "sine", density: 0.5, octave: 1, gain: 0.38 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 1300, swing: 0.28, progs: [[0,3,4,1],[0,4,3,5],[1,4,0,3],[0,3,1,4]] },
+  electronic:{ scale: SCALES.minor,  root: 48, bpm: [118, 128],drums: "four",     bass: { type: "sawtooth", pattern: "offbeat", gain: 0.5 }, lead: { type: "sawtooth", density: 0.7, octave: 1, gain: 0.4 }, pad: { type: "sawtooth", gain: 0.24 }, cutoff: 2800, swing: 0, progs: [[0,0,5,3],[0,3,4,4],[0,5,3,0],[0,0,3,5]] },
+  techno:    { scale: SCALES.minor,  root: 45, bpm: [126, 134],drums: "four",     bass: { type: "sawtooth", pattern: "root", gain: 0.55 }, lead: { type: "square", density: 0.55, octave: 1, gain: 0.32 }, pad: null, cutoff: 2400, swing: 0, progs: [[0,0,0,3],[0,0,5,5],[0,0,0,0],[0,3,0,5]] },
+  pop:       { scale: SCALES.major,  root: 50, bpm: [100, 118],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.72, octave: 1, gain: 0.48 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2900, swing: 0, progs: [[0,4,5,3],[5,3,0,4],[0,3,4,5],[4,5,3,0]] },
+  rock:      { scale: SCALES.minor,  root: 40, bpm: [120, 142],drums: "rock",     bass: { type: "square", pattern: "eighths", gain: 0.5 }, lead: { type: "square", density: 0.5, octave: 1, gain: 0.3 }, pad: { type: "square", gain: 0.22 }, cutoff: 2100, swing: 0, progs: [[0,0,3,4],[0,5,3,4],[0,3,4,0],[0,4,3,5]] },
+  classical: { scale: SCALES.major,  root: 52, bpm: [82, 104], drums: "none",     bass: { type: "triangle", pattern: "root", gain: 0.45 }, lead: { type: "triangle", density: 0.9, octave: 1, gain: 0.42 }, pad: { type: "triangle", gain: 0.35 }, cutoff: 2600, swing: 0, progs: [[0,4,5,3],[0,3,4,5],[0,5,3,4],[3,0,4,5]] },
+  deep:      { scale: SCALES.minor,  root: 38, bpm: [60, 74],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: { type: "sine", density: 0.2, octave: 1, gain: 0.28 }, pad: { type: "sine", gain: 0.5 }, cutoff: 900, swing: 0, progs: [[0,0,3,4],[0,3,0,5],[0,5,3,0]] },
 };
 
 export function resolveGenre(id: string, rng: () => number = Math.random): string {
@@ -72,26 +73,27 @@ function wav(buffer: AudioBuffer): Uint8Array {
   return new Uint8Array(buf);
 }
 
-/** Peak-normalize every channel in place to ~-1 dBFS so output is always audible. */
-function normalize(buffer: AudioBuffer) {
-  let peak = 0;
+/**
+ * Soft-limit to a consistent loudness. Uses RMS (not a single peak, which a
+ * stray spike could otherwise crush to near-silence) and a tanh soft-clip so
+ * the result is always clearly audible and never harshly distorted.
+ */
+function softLimit(buffer: AudioBuffer, targetRms = 0.17) {
+  let sq = 0, n = 0;
   for (let c = 0; c < buffer.numberOfChannels; c++) {
     const d = buffer.getChannelData(c);
-    for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+    for (let i = 0; i < d.length; i++) { sq += d[i] * d[i]; n++; }
   }
-  if (peak < 1e-4) return;
-  const g = Math.min(6, 0.89 / peak);
+  const rms = Math.sqrt(sq / Math.max(1, n)) || 1e-6;
+  const g = Math.max(0.5, Math.min(28, targetRms / rms));
   for (let c = 0; c < buffer.numberOfChannels; c++) {
     const d = buffer.getChannelData(c);
-    for (let i = 0; i < d.length; i++) d[i] *= g;
+    for (let i = 0; i < d.length; i++) d[i] = Math.tanh(d[i] * g) * 0.95;
   }
 }
 
-/** Synthesize an exact-length track for the given genre/seed and return WAV bytes. */
 export async function generateMusic(
-  genreId: string,
-  seed: number,
-  seconds: number,
+  genreId: string, seed: number, seconds: number,
 ): Promise<{ bytes: Uint8Array; genreId: string }> {
   const rng = mulberry32(seed);
   const resolved = resolveGenre(genreId, rng);
@@ -103,29 +105,31 @@ export async function generateMusic(
     (window as any).OfflineAudioContext || (window as any).webkitOfflineAudioContext;
   const ctx = new OAC(2, Math.ceil(dur * sr), sr);
 
-  const master = ctx.createGain(); master.gain.value = 0.8;
+  const master = ctx.createGain(); master.gain.value = 0.6;
   const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -14; comp.ratio.value = 3;
+  comp.threshold.value = -18; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
   master.connect(comp); comp.connect(ctx.destination);
 
-  // echo send
-  const delay = ctx.createDelay(1.5); delay.delayTime.value = 60 / 240;
-  const fb = ctx.createGain(); fb.gain.value = 0.24;
-  const wet = ctx.createGain(); wet.gain.value = 0.18;
+  const delay = ctx.createDelay(1.5);
+  const fb = ctx.createGain(); fb.gain.value = 0.2;
+  const wet = ctx.createGain(); wet.gain.value = 0.14;
   delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(master);
 
-  // shared noise buffer for drums
   const noiseBuf = ctx.createBuffer(1, sr, sr);
   const nd = noiseBuf.getChannelData(0);
   for (let i = 0; i < nd.length; i++) nd[i] = rng() * 2 - 1;
 
-  // per-seed musical variation
-  const rootOffset = Math.floor(rng() * 10) - 4;
-  const root = cfg.root + rootOffset;
+  // per-seed variation
+  const root = cfg.root + (Math.floor(rng() * 10) - 4);
   const bpm = cfg.bpm[0] + Math.floor(rng() * (cfg.bpm[1] - cfg.bpm[0] + 1));
   const prog = pick(rng, cfg.progs);
   const beat = 60 / bpm, bar = beat * 4, sl = cfg.scale.length;
   delay.delayTime.value = beat / 2;
+  const swing = cfg.swing * (beat / 2);
+
+  // a short melodic motif reused (with variation) so the lead feels intentional
+  const motifLen = 3 + Math.floor(rng() * 4);
+  const motif = Array.from({ length: motifLen }, () => Math.floor(rng() * sl) + (rng() < 0.25 ? sl : 0));
 
   const tone = (freq: number, start: number, len: number, type: Wave, gain: number, pan: number, send = 0.2) => {
     const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
@@ -136,80 +140,83 @@ export async function generateMusic(
     g.gain.setValueAtTime(gain, start + Math.max(a, len - r));
     g.gain.linearRampToValueAtTime(0.0001, start + len);
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cfg.cutoff;
-    const p = ctx.createStereoPanner(); p.pan.value = pan;
+    const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan));
     o.connect(g); g.connect(lp); lp.connect(p); p.connect(master);
-    if (send > 0) { const s = ctx.createGain(); s.gain.value = send; p.connect(s); s.connect(delay); }
+    if (send > 0) { const sn = ctx.createGain(); sn.gain.value = send; p.connect(sn); sn.connect(delay); }
     o.start(start); o.stop(start + len + 0.05);
   };
-
-  const kick = (start: number) => {
+  const kick = (t: number, gain = 0.9) => {
     const o = ctx.createOscillator(); o.type = "sine";
-    o.frequency.setValueAtTime(140, start);
-    o.frequency.exponentialRampToValueAtTime(48, start + 0.11);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.9, start);
-    g.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
-    o.connect(g); g.connect(master); o.start(start); o.stop(start + 0.2);
+    o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.11);
+    const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.2);
   };
-  const noiseHit = (start: number, len: number, hp: number, gain: number) => {
+  const noiseHit = (t: number, len: number, hp: number, gain: number) => {
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
     const f = ctx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = hp;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(gain, start);
-    g.gain.exponentialRampToValueAtTime(0.001, start + len);
-    src.connect(f); f.connect(g); g.connect(master); src.start(start); src.stop(start + len + 0.02);
+    const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + len + 0.02);
   };
-  const hat = (t: number) => noiseHit(t, 0.05, 7000, 0.14);
-  const snare = (t: number) => { noiseHit(t, 0.18, 1800, 0.3); };
+  const hat = (t: number, gain = 0.12) => noiseHit(t, 0.05, 7000, gain);
+  const snare = (t: number, gain = 0.3) => noiseHit(t, 0.18, 1800, gain);
 
-  const scaleNote = (deg: number, oct: number) => {
+  const note = (deg: number, oct: number) => {
     const idx = ((deg % sl) + sl) % sl;
     return root + cfg.scale[idx] + 12 * (oct + Math.floor(deg / sl));
   };
 
   const bars = Math.ceil(dur / bar);
+  let motifPos = 0;
   for (let b = 0; b < bars; b++) {
     const t0 = b * bar;
     const deg = prog[b % prog.length];
+    const phrase = b % 4;
+    const breather = b > 0 && b % 8 === 7 && rng() < 0.5; // occasional drop-out bar
 
-    // pad chord
+    // pad chord (with a gentle velocity swell per bar)
     if (cfg.pad) {
-      [0, 2, 4].forEach((st, i) =>
-        tone(midi(scaleNote(deg + st, 0)), t0, bar, cfg.pad!.type, cfg.pad!.gain * 0.4, (i - 1) * 0.4, 0.3));
+      const vel = 0.85 + rng() * 0.25;
+      [0, 2, 4].forEach((st, i) => tone(midi(note(deg + st, 0)), t0, bar, cfg.pad!.type, cfg.pad!.gain * 0.4 * vel, (i - 1) * 0.4, 0.3));
     }
     // bass
     if (cfg.bass) {
       const bp = cfg.bass;
-      if (bp.pattern === "sustain") tone(midi(scaleNote(deg, -2)), t0, bar, bp.type, bp.gain, 0, 0.05);
-      else {
-        for (let bt = 0; bt < 4; bt++) {
-          const t = t0 + bt * beat;
-          if (bp.pattern === "root") tone(midi(scaleNote(deg, -2)), t, beat * 0.9, bp.type, bp.gain, 0, 0.05);
-          if (bp.pattern === "eighths") { tone(midi(scaleNote(deg, -2)), t, beat * 0.45, bp.type, bp.gain, 0, 0.05); tone(midi(scaleNote(deg + 4, -2)), t + beat / 2, beat * 0.45, bp.type, bp.gain * 0.8, 0, 0.05); }
-          if (bp.pattern === "offbeat") tone(midi(scaleNote(deg, -2)), t + beat / 2, beat * 0.4, bp.type, bp.gain, 0, 0.05);
-        }
+      if (bp.pattern === "sustain") tone(midi(note(deg, -2)), t0, bar, bp.type, bp.gain, 0, 0.05);
+      else for (let bt = 0; bt < 4; bt++) {
+        const t = t0 + bt * beat;
+        const walk = rng() < 0.2 ? 4 : 0;
+        if (bp.pattern === "root") tone(midi(note(deg + walk, -2)), t, beat * 0.9, bp.type, bp.gain, 0, 0.05);
+        if (bp.pattern === "eighths") { tone(midi(note(deg, -2)), t, beat * 0.45, bp.type, bp.gain, 0, 0.05); tone(midi(note(deg + 4, -2)), t + beat / 2, beat * 0.45, bp.type, bp.gain * 0.8, 0, 0.05); }
+        if (bp.pattern === "offbeat") tone(midi(note(deg + walk, -2)), t + beat / 2, beat * 0.4, bp.type, bp.gain, 0, 0.05);
       }
     }
-    // lead / arp
+    // lead: play the motif over the current chord, with rests + octave jumps
     if (cfg.lead) {
       const steps = 8, stepDur = bar / steps;
-      const chordTones = [0, 2, 4, 6];
       for (let s = 0; s < steps; s++) {
+        const swingOff = s % 2 === 1 ? swing : 0;
         if (rng() < cfg.lead.density) {
-          const useChord = rng() < 0.6;
-          const d = useChord ? deg + pick(rng, chordTones) : deg + Math.floor(rng() * sl);
-          tone(midi(scaleNote(d, cfg.lead.octave)), t0 + s * stepDur, stepDur * 0.9, cfg.lead.type, cfg.lead.gain, (rng() * 2 - 1) * 0.6, 0.3);
+          const m = motif[motifPos % motif.length]; motifPos++;
+          const oct = cfg.lead.octave + (rng() < 0.15 ? 1 : 0);
+          const vel = 0.8 + rng() * 0.35;
+          tone(midi(note(deg + m, oct)), t0 + s * stepDur + swingOff, stepDur * 0.9, cfg.lead.type, cfg.lead.gain * vel, (rng() * 2 - 1) * 0.6, 0.3);
         }
       }
     }
-    // drums
-    if (cfg.drums === "four") { for (let bt = 0; bt < 4; bt++) kick(t0 + bt * beat); for (let h = 0; h < 8; h++) hat(t0 + h * (beat / 2)); }
-    else if (cfg.drums === "backbeat") { kick(t0); kick(t0 + 2 * beat); snare(t0 + beat); snare(t0 + 3 * beat); for (let h = 0; h < 8; h++) hat(t0 + h * (beat / 2)); }
-    else if (cfg.drums === "rock") { kick(t0); kick(t0 + 2 * beat); kick(t0 + 2.5 * beat); snare(t0 + beat); snare(t0 + 3 * beat); for (let h = 0; h < 8; h++) hat(t0 + h * (beat / 2)); }
-    else if (cfg.drums === "ambient") { if (b % 2 === 0) kick(t0); }
+    // drums with phrase dynamics + fills
+    if (!breather) {
+      if (cfg.drums === "four") { for (let bt = 0; bt < 4; bt++) kick(t0 + bt * beat); for (let h = 0; h < 8; h++) hat(t0 + h * (beat / 2) + (h % 2 ? swing : 0), h % 2 ? 0.08 : 0.13); }
+      else if (cfg.drums === "backbeat") { kick(t0); kick(t0 + 2 * beat); snare(t0 + beat); snare(t0 + 3 * beat); for (let h = 0; h < 8; h++) hat(t0 + h * (beat / 2) + (h % 2 ? swing : 0), h % 2 ? 0.08 : 0.12); }
+      else if (cfg.drums === "rock") { kick(t0); kick(t0 + 2 * beat); kick(t0 + 2.5 * beat); snare(t0 + beat); snare(t0 + 3 * beat); for (let h = 0; h < 8; h++) hat(t0 + h * (beat / 2), 0.13); }
+      else if (cfg.drums === "ambient") { if (b % 2 === 0) kick(t0, 0.6); }
+      // fill on the last bar of a phrase
+      if (phrase === 3 && cfg.drums !== "none" && cfg.drums !== "ambient") {
+        snare(t0 + 3 * beat + beat / 2, 0.28); snare(t0 + 3.5 * beat + beat / 4, 0.32);
+      }
+    }
   }
 
   const rendered = await ctx.startRendering();
-  normalize(rendered);
+  softLimit(rendered);
   return { bytes: wav(rendered), genreId: resolved };
 }

@@ -140,7 +140,14 @@ export default function Home() {
       return { music: { bytes, loop: true, volume: vol }, label: musicFile.name };
     }
 
-    if (musicSource === MUSIC_JAMENDO && hasJamendoKey()) {
+    if (musicSource === MUSIC_JAMENDO) {
+      // STRICT: only Jamendo. If it can't be used, the video is made without
+      // music (never generated) so the choice is respected.
+      if (!hasJamendoKey()) {
+        flags.jamendoFellBack = true;
+        flags.jamendoError = "No Jamendo Client ID set — add it in Settings.";
+        return { music: null, label: "No music (Jamendo not configured)" };
+      }
       try {
         onProgress({ stage: "audio", progress: 3, message: "Finding a Jamendo track…" });
         let genre = jamGenre;
@@ -148,7 +155,6 @@ export default function Home() {
           const pool = jamendoGenres.filter((g) => g.id !== MUSIC_RANDOM);
           genre = pool[Math.floor(Math.random() * pool.length)].id;
         }
-        // Cache the search per genre for the whole run (fewer API calls, no repeats).
         let tracks = jamCache.get(genre);
         if (!tracks) {
           tracks = await searchJamendo(getJamendoKey(), genre, 200);
@@ -158,9 +164,8 @@ export default function Home() {
         const candidates = [...tracks.filter((t) => !used.has(t.id)), ...tracks].sort(() => Math.random() - 0.5);
         if (candidates.length === 0) throw new Error("No commercial-licensed Jamendo tracks for this genre.");
 
-        // Try several tracks — some audio URLs may be CORS-blocked; skip to the next.
         let lastErr = "";
-        for (let a = 0; a < Math.min(6, candidates.length); a++) {
+        for (let a = 0; a < Math.min(8, candidates.length); a++) {
           const t = candidates[a];
           onProgress({ stage: "audio", progress: 4, message: `Downloading “${t.name}”…` });
           for (const url of [t.audio, t.audiodownload].filter(Boolean) as string[]) {
@@ -175,12 +180,10 @@ export default function Home() {
         }
         throw new Error(`Couldn't download any Jamendo track (${lastErr || "blocked"}).`);
       } catch (e) {
+        // Strict: do NOT generate. Export without music and report why.
         flags.jamendoFellBack = true;
         flags.jamendoError = e instanceof Error ? e.message : String(e);
-        onProgress({ stage: "audio", progress: 3, message: "Jamendo unavailable — composing music…" });
-        const seed = (Date.now() ^ (index * 2654435761)) >>> 0;
-        const { bytes, genreId } = await generateMusic("random", seed, targetLen);
-        return { music: { bytes, loop: false, volume: vol }, label: `${genLabel(genreId)} (generated)` };
+        return { music: null, label: "No music (Jamendo failed)" };
       }
     }
 
@@ -298,7 +301,7 @@ export default function Home() {
       toast({ title: `${made} video${made > 1 ? "s" : ""} ready`, description: desc });
       notify("Your videos are ready", `${made} video${made > 1 ? "s" : ""} in ${formatElapsed(totalMs)} — waiting for download.`);
       if (flags.jamendoFellBack) {
-        toast({ title: "Jamendo unavailable", description: `${flags.jamendoError} Used generated music instead.`, variant: "destructive" });
+        toast({ title: "Jamendo issue", description: `${flags.jamendoError} Those videos were exported without music (Jamendo-only mode).`, variant: "destructive" });
       }
     }
   }
