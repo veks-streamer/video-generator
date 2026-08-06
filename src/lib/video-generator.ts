@@ -149,9 +149,9 @@ async function fetchClip(url: string): Promise<Uint8Array> {
  */
 async function writeMusic(ff: FFmpeg, parts: Uint8Array[]): Promise<string | null> {
   if (!parts.length) return null;
-  if (parts.length === 1) { await ff.writeFile("music_in", parts[0]); return "music_in"; }
+  if (parts.length === 1) { await ff.writeFile("music_in", new Uint8Array(parts[0])); return "music_in"; }
   const names: string[] = [];
-  for (let i = 0; i < parts.length; i++) { const n = `m${i}`; await ff.writeFile(n, parts[i]); names.push(n); }
+  for (let i = 0; i < parts.length; i++) { const n = `m${i}`; await ff.writeFile(n, new Uint8Array(parts[i])); names.push(n); }
   const inputs = names.flatMap((n) => ["-i", n]);
   const pre = names.map((_, i) => `[${i}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`).join(";");
   const chain = names.map((_, i) => `[a${i}]`).join("");
@@ -162,7 +162,7 @@ async function writeMusic(ff: FFmpeg, parts: Uint8Array[]): Promise<string | nul
     return "music_cat.m4a";
   } catch (e) {
     pushLog(`music concat failed, using first track: ${e instanceof Error ? e.message : String(e)}`);
-    await ff.writeFile("music_in", parts[0]);
+    await ff.writeFile("music_in", new Uint8Array(parts[0]));
     for (const n of names) await ff.deleteFile(n).catch(() => {});
     return "music_in";
   }
@@ -203,7 +203,7 @@ export async function addMusicToVideo(
 ): Promise<Uint8Array> {
   await resetFFmpeg();
   const ff = await getFFmpeg();
-  await ff.writeFile("hwvideo.mp4", videoBytes);
+  await ff.writeFile("hwvideo.mp4", new Uint8Array(videoBytes));
   let out = "hwvideo.mp4";
   if (music) out = await muxMusic(ff, "hwvideo.mp4", music, duration);
   const data = (await ff.readFile(out)) as Uint8Array;
@@ -258,7 +258,7 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     const len = Math.min(clip.duration, cut);
     // Random window inside the clip so the same footage looks different each run.
     const off = (Math.random() * Math.max(0, clip.duration - len)).toFixed(2);
-    await ff.writeFile(src, data);
+    await ff.writeFile(src, new Uint8Array(data));
     onProgress({ stage: "encoding", progress: 10 + (uniqueLen / targetDuration) * 60, message: `Processing footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     try {
       await execWD(ff, [
@@ -344,7 +344,7 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     const clip = clips[i];
     onProgress({ stage: "downloading", progress: 8 + Math.min(78, (uniqueLen / targetDuration) * 78), message: `Fast mode — fetching footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     const mp4 = `f${i}.mp4`, ts = `f${i}.ts`;
-    try { const d = await fetchClip(clip.url); dbg(`clip ${clip.id}: ${(d.length/1048576).toFixed(1)}MB ${clip.url}`); await ff.writeFile(mp4, d); }
+    try { const d = await fetchClip(clip.url); dbg(`clip ${clip.id}: ${(d.length/1048576).toFixed(1)}MB ${clip.url}`); await ff.writeFile(mp4, new Uint8Array(d)); }
     catch (e) { downloadFailures++; pushLog(`fast download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     // Random keyframe start so repeated footage differs between videos. Input -ss
     // with copy snaps to a keyframe, so the segment stays clean.
@@ -364,10 +364,14 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     throw new Error(`Fast mode couldn't prepare any clips (${downloadFailures} download, ${remuxFailures} remux failures). Try Standard mode.`);
   }
 
-  // cycle clips to reach targetDuration (repeat if not enough unique footage)
+  // Fill to targetDuration by cycling clips, but SHUFFLE each pass so repeated
+  // footage is interleaved (A,C,B,A,C,B…) instead of an obvious A,B,C,A,B,C loop.
   const order: string[] = [];
-  let acc = 0, k = 0;
-  while (acc < targetDuration - 1e-3 && k < 100000) { const p = parts[k % parts.length]; order.push(p.ts); acc += p.len; k++; }
+  let acc = 0, guard = 0;
+  while (acc < targetDuration - 1e-3 && guard < 100000) {
+    const round = [...parts].sort(() => Math.random() - 0.5);
+    for (const p of round) { if (acc >= targetDuration - 1e-3) break; order.push(p.ts); acc += p.len; guard++; }
+  }
   const realDuration = Math.min(targetDuration, acc);
 
   onProgress({ stage: "stitching", progress: 88, message: "Fast mode — joining clips…" });

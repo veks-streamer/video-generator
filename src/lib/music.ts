@@ -34,14 +34,14 @@ interface Cfg {
 }
 
 const GENRES: Record<string, Cfg> = {
-  ambient:   { scale: SCALES.minor,  root: 48, bpm: [60, 72],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "sine", density: 0.25, octave: 1, gain: 0.3 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1300, swing: 0, progs: [[0,5,3,4],[0,3,4,3],[0,4,5,3],[5,3,4,0]] },
-  calm:      { scale: SCALES.penta,  root: 50, bpm: [72, 88],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.5 }, lead: { type: "triangle", density: 0.45, octave: 1, gain: 0.42 }, pad: { type: "sine", gain: 0.45 }, cutoff: 2000, swing: 0.1, progs: [[0,3,1,4],[0,4,3,1],[0,2,4,3],[3,4,0,2]] },
-  uplifting: { scale: SCALES.major,  root: 52, bpm: [104, 124],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.7, octave: 1, gain: 0.5 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2500, swing: 0, progs: [[0,4,5,3],[0,5,3,4],[3,4,0,5],[0,3,4,5],[5,4,0,3]] },
+  ambient:   { scale: SCALES.minor,  root: 48, bpm: [60, 72],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.62 }, lead: { type: "sine", density: 0.25, octave: 1, gain: 0.3 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1300, swing: 0, progs: [[0,5,3,4],[0,3,4,3],[0,4,5,3],[5,3,4,0]] },
+  calm:      { scale: SCALES.penta,  root: 50, bpm: [72, 88],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.62 }, lead: { type: "triangle", density: 0.45, octave: 1, gain: 0.42 }, pad: { type: "sine", gain: 0.45 }, cutoff: 2000, swing: 0.1, progs: [[0,3,1,4],[0,4,3,1],[0,2,4,3],[3,4,0,2]] },
+  uplifting: { scale: SCALES.major,  root: 52, bpm: [104, 124],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.62 }, lead: { type: "triangle", density: 0.7, octave: 1, gain: 0.5 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2500, swing: 0, progs: [[0,4,5,3],[0,5,3,4],[3,4,0,5],[0,3,4,5],[5,4,0,3]] },
   cinematic: { scale: SCALES.minor,  root: 45, bpm: [72, 96],  drums: "ambient",  bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: { type: "triangle", density: 0.35, octave: 1, gain: 0.35 }, pad: { type: "sine", gain: 0.5 }, cutoff: 1600, swing: 0, progs: [[0,5,3,4],[0,3,5,4],[0,6,5,4],[5,3,0,4]] },
   lofi:      { scale: SCALES.dorian, root: 48, bpm: [72, 88],  drums: "backbeat", bass: { type: "triangle", pattern: "offbeat", gain: 0.5 }, lead: { type: "sine", density: 0.5, octave: 1, gain: 0.38 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 1300, swing: 0.28, progs: [[0,3,4,1],[0,4,3,5],[1,4,0,3],[0,3,1,4]] },
-  electronic:{ scale: SCALES.minor,  root: 48, bpm: [118, 128],drums: "four",     bass: { type: "sawtooth", pattern: "offbeat", gain: 0.5 }, lead: { type: "sawtooth", density: 0.7, octave: 1, gain: 0.4 }, pad: { type: "sawtooth", gain: 0.24 }, cutoff: 2300, swing: 0, progs: [[0,0,5,3],[0,3,4,4],[0,5,3,0],[0,0,3,5]] },
-  techno:    { scale: SCALES.minor,  root: 45, bpm: [126, 134],drums: "four",     bass: { type: "sawtooth", pattern: "root", gain: 0.55 }, lead: { type: "square", density: 0.55, octave: 1, gain: 0.32 }, pad: null, cutoff: 2000, swing: 0, progs: [[0,0,0,3],[0,0,5,5],[0,0,0,0],[0,3,0,5]] },
-  pop:       { scale: SCALES.major,  root: 50, bpm: [100, 118],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.55 }, lead: { type: "triangle", density: 0.72, octave: 1, gain: 0.48 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2400, swing: 0, progs: [[0,4,5,3],[5,3,0,4],[0,3,4,5],[4,5,3,0]] },
+  electronic:{ scale: SCALES.minor,  root: 48, bpm: [118, 128],drums: "four",     bass: { type: "sawtooth", pattern: "offbeat", gain: 0.6 }, lead: { type: "sawtooth", density: 0.7, octave: 1, gain: 0.4 }, pad: { type: "sawtooth", gain: 0.24 }, cutoff: 2300, swing: 0, progs: [[0,0,5,3],[0,3,4,4],[0,5,3,0],[0,0,3,5]] },
+  techno:    { scale: SCALES.minor,  root: 45, bpm: [126, 134],drums: "four",     bass: { type: "sawtooth", pattern: "root", gain: 0.62 }, lead: { type: "square", density: 0.55, octave: 1, gain: 0.32 }, pad: null, cutoff: 2000, swing: 0, progs: [[0,0,0,3],[0,0,5,5],[0,0,0,0],[0,3,0,5]] },
+  pop:       { scale: SCALES.major,  root: 50, bpm: [100, 118],drums: "backbeat", bass: { type: "triangle", pattern: "eighths", gain: 0.62 }, lead: { type: "triangle", density: 0.72, octave: 1, gain: 0.48 }, pad: { type: "triangle", gain: 0.4 }, cutoff: 2400, swing: 0, progs: [[0,4,5,3],[5,3,0,4],[0,3,4,5],[4,5,3,0]] },
   rock:      { scale: SCALES.minor,  root: 40, bpm: [120, 142],drums: "rock",     bass: { type: "square", pattern: "eighths", gain: 0.5 }, lead: { type: "square", density: 0.5, octave: 1, gain: 0.3 }, pad: { type: "square", gain: 0.22 }, cutoff: 1850, swing: 0, progs: [[0,0,3,4],[0,5,3,4],[0,3,4,0],[0,4,3,5]] },
   classical: { scale: SCALES.major,  root: 52, bpm: [82, 104], drums: "none",     bass: { type: "triangle", pattern: "root", gain: 0.45 }, lead: { type: "triangle", density: 0.9, octave: 1, gain: 0.42 }, pad: { type: "triangle", gain: 0.35 }, cutoff: 2200, swing: 0, progs: [[0,4,5,3],[0,3,4,5],[0,5,3,4],[3,0,4,5]] },
   deep:      { scale: SCALES.minor,  root: 38, bpm: [60, 74],  drums: "none",     bass: { type: "sine", pattern: "sustain", gain: 0.6 }, lead: { type: "sine", density: 0.2, octave: 1, gain: 0.28 }, pad: { type: "sine", gain: 0.5 }, cutoff: 900, swing: 0, progs: [[0,0,3,4],[0,3,0,5],[0,5,3,0]] },
@@ -172,7 +172,7 @@ export async function generateMusic(
     if (rev > 0) { const rs = ctx.createGain(); rs.gain.value = rev; p.connect(rs); rs.connect(reverb); }
     const es = ctx.createGain(); es.gain.value = 0.1; p.connect(es); es.connect(delay);
   };
-  const kick = (t: number, gain = 0.7) => {
+  const kick = (t: number, gain = 0.85) => {
     const o = ctx.createOscillator(); o.type = "sine";
     o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
     const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
@@ -187,8 +187,8 @@ export async function generateMusic(
     const rs = ctx.createGain(); rs.gain.value = 0.08; g.connect(rs); rs.connect(reverb);
     src.start(t); src.stop(t + len + 0.02);
   };
-  const hat = (t: number, gain = 0.08) => noiseHit(t, 0.045, 8000, gain);
-  const snare = (t: number, gain = 0.22) => noiseHit(t, 0.16, 1600, gain);
+  const hat = (t: number, gain = 0.10) => noiseHit(t, 0.045, 8000, gain);
+  const snare = (t: number, gain = 0.28) => noiseHit(t, 0.16, 1600, gain);
 
   const note = (deg: number, oct: number) => {
     const idx = ((deg % sl) + sl) % sl;
@@ -207,6 +207,8 @@ export async function generateMusic(
     if (cfg.pad) {
       const vel = 0.85 + rng() * 0.25;
       [0, 2, 4].forEach((st, i) => tone(midi(note(deg + st, 0)), t0, bar, cfg.pad!.type, cfg.pad!.gain * 0.4 * vel, (i - 1) * 0.4, 0.3));
+      // low root for warmth/body
+      tone(midi(note(deg, -1)), t0, bar, "sine", cfg.pad!.gain * 0.5 * vel, 0, 0.15);
     }
     // bass
     if (cfg.bass) {
@@ -225,11 +227,13 @@ export async function generateMusic(
       const steps = 8, stepDur = bar / steps;
       for (let s = 0; s < steps; s++) {
         const swingOff = s % 2 === 1 ? swing : 0;
-        if (rng() < cfg.lead.density) {
+        if (rng() < cfg.lead.density * 0.85) {
           const m = motif[motifPos % motif.length]; motifPos++;
-          const oct = cfg.lead.octave + (rng() < 0.15 ? 1 : 0);
-          const vel = 0.8 + rng() * 0.35;
-          tone(midi(note(deg + m, oct)), t0 + s * stepDur + swingOff, stepDur * 0.9, cfg.lead.type, cfg.lead.gain * vel, (rng() * 2 - 1) * 0.6, 0.3);
+          const oct = (cfg.lead.octave - 1) + (rng() < 0.18 ? 1 : 0); // an octave lower = warmer, less piercing
+          const vel = 0.7 + rng() * 0.35;
+          tone(midi(note(deg + m, oct)), t0 + s * stepDur + swingOff, stepDur * 0.9, cfg.lead.type, cfg.lead.gain * 0.85 * vel, (rng() * 2 - 1) * 0.6, 0.35);
+        } else {
+          motifPos++; // advance so the motif still moves through rests
         }
       }
     }
