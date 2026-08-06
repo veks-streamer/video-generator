@@ -27,7 +27,8 @@ import {
 } from "@/lib/storage";
 import { searchVideos, selectClips } from "@/lib/pexels";
 import { searchPixabay } from "@/lib/pixabay";
-import { generateVideo, getRecentFfmpegLog, setDebugLogger, addMusicToVideo } from "@/lib/video-generator";
+import { generateVideo, getRecentFfmpegLog, addMusicToVideo } from "@/lib/video-generator";
+import { setDebugLogger } from "@/lib/debuglog";
 import { hwEncodeVideo, hwSupported } from "@/lib/hw-encode";
 import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio } from "@/lib/jamendo";

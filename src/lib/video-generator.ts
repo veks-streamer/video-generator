@@ -1,6 +1,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { VideoClip, ProgressUpdate } from "./constants";
 import { SHORT_SHA } from "../version";
+import { dbg } from "./debuglog";
 
 // Core files are hosted alongside the app (same-origin) so we avoid any
 // cross-origin-isolation / SharedArrayBuffer requirements. This is the
@@ -14,12 +15,10 @@ let mtDisabled = false; // set if the multi-thread core fails; fall back to sing
 // Ring buffer of the most recent ffmpeg log lines, surfaced on error so
 // failures are actually diagnosable in the UI/console.
 const recentLogs: string[] = [];
-let debugLog: ((msg: string) => void) | null = null;
-export function setDebugLogger(fn: ((msg: string) => void) | null) { debugLog = fn; }
 function pushLog(line: string) {
   recentLogs.push(line);
   if (recentLogs.length > 25) recentLogs.shift();
-  try { debugLog?.(line); } catch { /* */ }
+  dbg(line);
 }
 export function getRecentFfmpegLog(): string {
   return recentLogs.slice(-8).join("\n");
@@ -37,7 +36,7 @@ const T_FINAL = 300000;  // concat / mux / audio
 async function execWD(ff: FFmpeg, args: string[], base: number): Promise<void> {
   const mtActive = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
   const ms = mtActive ? 15000 : 900000;
-  debugLog?.(`$ ffmpeg ${args.join(" ")}`);
+  dbg(`$ ffmpeg ${args.join(" ")}`);
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`ffmpeg timed out after ${Math.round(ms / 1000)}s (engine stuck)`)), ms);
@@ -83,7 +82,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
           wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
         });
       }
-      debugLog?.(`ffmpeg core loaded: ${mt ? "multi-thread (Turbo)" : "single-thread"}`);
+      dbg(`ffmpeg core loaded: ${mt ? "multi-thread (Turbo)" : "single-thread"}`);
       ffmpeg = instance;
       return instance;
     } catch (e) {
@@ -253,7 +252,7 @@ async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<Gene
     const clip = clips[i];
     onProgress({ stage: "downloading", progress: 10 + (uniqueLen / targetDuration) * 60, message: `Fetching footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     let data: Uint8Array;
-    try { data = await fetchClip(clip.url); debugLog?.(`clip ${clip.id}: ${(data.length/1048576).toFixed(1)}MB ${clip.url}`); } catch (e) { downloadFailures++; pushLog(`download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
+    try { data = await fetchClip(clip.url); dbg(`clip ${clip.id}: ${(data.length/1048576).toFixed(1)}MB ${clip.url}`); } catch (e) { downloadFailures++; pushLog(`download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     const src = `s${i}.mp4`, out = `n${i}.mp4`;
     const cut = varyCuts ? 2.5 + Math.random() * Math.max(0.5, perClipCap - 2.5) : perClipCap;
     const len = Math.min(clip.duration, cut);
@@ -345,7 +344,7 @@ async function generateFast(ff: FFmpeg, opts: GenerateOptions): Promise<Generate
     const clip = clips[i];
     onProgress({ stage: "downloading", progress: 8 + Math.min(78, (uniqueLen / targetDuration) * 78), message: `Fast mode — fetching footage… ${Math.round(uniqueLen)}s / ${Math.round(targetDuration)}s` });
     const mp4 = `f${i}.mp4`, ts = `f${i}.ts`;
-    try { const d = await fetchClip(clip.url); debugLog?.(`clip ${clip.id}: ${(d.length/1048576).toFixed(1)}MB ${clip.url}`); await ff.writeFile(mp4, d); }
+    try { const d = await fetchClip(clip.url); dbg(`clip ${clip.id}: ${(d.length/1048576).toFixed(1)}MB ${clip.url}`); await ff.writeFile(mp4, d); }
     catch (e) { downloadFailures++; pushLog(`fast download failed ${clip.id}: ${e instanceof Error ? e.message : String(e)}`); continue; }
     // Random keyframe start so repeated footage differs between videos. Input -ss
     // with copy snaps to a keyframe, so the segment stays clean.
