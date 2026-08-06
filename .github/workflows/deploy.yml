@@ -5,19 +5,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Permissions needed for the GitHub Pages deployment
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# Allow one concurrent deployment, cancel older in-progress ones
 concurrency:
-  group: pages
+  group: pages-deploy
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,12 +24,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-
-      - name: Configure GitHub Pages
-        # Requires Pages "Source" to be set to "GitHub Actions" once in
-        # Settings > Pages. We do not use enablement:true because the default
-        # GITHUB_TOKEN is not allowed to create the Pages site.
-        uses: actions/configure-pages@v5
 
       - name: Install dependencies
         run: npm ci
@@ -52,21 +42,18 @@ jobs:
           VITE_RUN: ${{ github.run_number }}
           VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+      - name: Prepare for Pages
+        run: |
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # Publish to the gh-pages branch (bypasses the GitHub Pages deployment API,
+      # which was getting stuck in 'deployment_queued'). Set Pages Source to
+      # "Deploy from a branch" -> gh-pages -> / (root).
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          timeout: 1200000
-          error_count: 15
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
