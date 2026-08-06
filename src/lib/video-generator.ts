@@ -1,12 +1,19 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { toBlobURL } from "@ffmpeg/util";
 import type { VideoClip, ProgressUpdate } from "./constants";
-import { SHORT_SHA } from "../version";
 import { dbg } from "./debuglog";
 
-// Core files are hosted alongside the app (same-origin) so we avoid any
-// cross-origin-isolation / SharedArrayBuffer requirements. This is the
-// single-threaded build of ffmpeg.wasm, which runs fine on GitHub Pages.
-const CORE_BASE = `${import.meta.env.BASE_URL}ffmpeg`;
+// The single-thread ffmpeg.wasm core (~31 MB .wasm) is fetched at runtime from a
+// public CDN and turned into a same-origin blob: URL via toBlobURL(). This keeps
+// the deployed bundle tiny (no 31 MB file to host) so it works on every static
+// host — including Cloudflare Pages, whose per-file upload limit is 25 MB — while
+// still avoiding any cross-origin-isolation / SharedArrayBuffer requirements.
+const CORE_VERSION = "0.12.10"; // must match the installed @ffmpeg/core
+const CORE_CDNS = [
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
+  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
+];
+
 
 let ffmpeg: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
@@ -50,6 +57,28 @@ async function execWD(ff: FFmpeg, args: string[], base: number): Promise<void> {
   }
 }
 
+// Load the ffmpeg core, trying a same-origin copy first (if bundled), then each
+// CDN in turn. toBlobURL() fetches the file (CDN sends CORS headers) and returns
+// a blob: URL the module worker can import(), sidestepping cross-origin import
+// restrictions. Cache-busted per build so a new deploy never runs a stale core.
+async function loadCore(instance: FFmpeg): Promise<void> {
+  let lastErr: unknown;
+  for (const base of CORE_CDNS) {
+    try {
+      dbg(`fetching ffmpeg core from ${base} ...`);
+      const coreURL = await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript");
+      const wasmURL = await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm");
+      await instance.load({ coreURL, wasmURL });
+      dbg(`ffmpeg core source: ${base}`);
+      return;
+    } catch (e) {
+      lastErr = e;
+      dbg(`core load failed from ${base}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg) return ffmpeg;
   if (loadPromise) return loadPromise;
@@ -63,11 +92,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
       // export) served same-origin — NOT the UMD build.
       // Cache-bust the unhashed core files so a new deploy never serves a
       // stale engine from the browser cache.
-      const v = `?v=${SHORT_SHA}`;
-      await instance.load({
-        coreURL: `${CORE_BASE}/ffmpeg-core.js${v}`,
-        wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
-      });
+      await loadCore(instance);
       dbg("ffmpeg core loaded: single-thread");
       ffmpeg = instance;
       return instance;
@@ -76,7 +101,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
       const detail = e instanceof Error ? e.message : String(e);
       throw new Error(
         `Failed to load the video engine (ffmpeg.wasm): ${detail}. ` +
-          `Make sure ${CORE_BASE}/ffmpeg-core.wasm is reachable, and use an up-to-date desktop browser.`,
+          `Could not fetch the ffmpeg core from the CDN — check your connection and use an up-to-date desktop browser.`,
       );
     }
   })();
