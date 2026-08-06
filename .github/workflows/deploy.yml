@@ -39,7 +39,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_BASE: /video-generator/
+          VITE_BASE: ./
           VITE_APP_VERSION: ${{ github.sha }}
           VITE_RUN: ${{ github.run_number }}
           VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
