@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera, Zap, Cpu } from "lucide-react";
+import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera, Cpu } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { hwSupported } from "@/lib/hw-encode";
 import { getPexelsKey, setPexelsKey, getJamendoKey, setJamendoKey, getPixabayKey, setPixabayKey } from "@/lib/storage";
@@ -73,19 +73,6 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
     } finally {
       setPixTesting(false);
     }
-  }
-
-  const [turbo, setTurbo] = useState(() => { try { return localStorage.getItem("vg.turbo") === "1"; } catch { return false; } });
-  const isolated = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true;
-  async function toggleTurbo(v: boolean) {
-    setTurbo(v);
-    try { if (v) localStorage.setItem("vg.turbo", "1"); else localStorage.removeItem("vg.turbo"); } catch { /* */ }
-    // Fully remove the COOP/COEP service worker when turning Turbo off.
-    if (!v && navigator.serviceWorker) {
-      try { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map((r) => r.unregister())); } catch { /* */ }
-    }
-    toast({ title: v ? "Turbo enabling…" : "Turbo disabling…", description: "Reloading to apply." });
-    setTimeout(() => window.location.reload(), 800);
   }
 
   const [hw, setHw] = useState(() => { try { return localStorage.getItem("vg.hw") === "1"; } catch { return false; } });
@@ -298,29 +285,6 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
                 <p className="text-muted-foreground text-xs">{hwOk ? "Supported in this browser." : "Your browser doesn't support WebCodecs video encoding."}</p>
               </div>
               <Switch checked={hw && hwOk} disabled={!hwOk} onCheckedChange={toggleHw} aria-label="Toggle hardware encoder" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" /> Turbo mode (multi-threaded)
-              {turbo && isolated && (<Badge className="bg-green-600 dark:bg-green-700 ml-1"><CheckCircle2 className="h-3 w-3 mr-1" /> Active</Badge>)}
-              {turbo && !isolated && (<Badge variant="secondary" className="ml-1">Enabling…</Badge>)}
-            </CardTitle>
-            <CardDescription>
-              Uses the multi-threaded video engine for faster encoding. It registers a small service worker to
-              enable the required browser isolation. Experimental — if clips or music ever fail to load, turn it off.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-sm">
-                <p className="font-medium">Enable Turbo</p>
-                <p className="text-muted-foreground text-xs">The page reloads when you toggle this. Status: {turbo ? (isolated ? "active" : "waiting for reload") : "off"}.</p>
-              </div>
-              <Switch checked={turbo} onCheckedChange={toggleTurbo} aria-label="Toggle Turbo mode" />
             </div>
           </CardContent>
         </Card>

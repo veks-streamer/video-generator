@@ -10,7 +10,6 @@ const CORE_BASE = `${import.meta.env.BASE_URL}ffmpeg`;
 
 let ffmpeg: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
-let mtDisabled = false; // set if the multi-thread core fails; fall back to single-thread
 
 // Ring buffer of the most recent ffmpeg log lines, surfaced on error so
 // failures are actually diagnosable in the UI/console.
@@ -34,8 +33,7 @@ const T_FINAL = 300000;  // concat / mux / audio
 // would never trigger it. This races the exec against a real timer and, on
 // timeout, force-terminates the (stuck) instance so we can recover / fall back.
 async function execWD(ff: FFmpeg, args: string[], base: number): Promise<void> {
-  const mtActive = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
-  const ms = mtActive ? 15000 : 900000;
+  const ms = base > 0 ? Math.max(base, 300000) : 300000;
   dbg(`$ ffmpeg ${args.join(" ")}`);
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
@@ -66,23 +64,11 @@ async function getFFmpeg(): Promise<FFmpeg> {
       // Cache-bust the unhashed core files so a new deploy never serves a
       // stale engine from the browser cache.
       const v = `?v=${SHORT_SHA}`;
-      // Use the multi-threaded core when the page is cross-origin isolated
-      // (Turbo mode enabled the COOP/COEP service worker). Much faster; falls
-      // back to the single-threaded core otherwise.
-      const mt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
-      if (mt) {
-        await instance.load({
-          coreURL: `${CORE_BASE}/mt/ffmpeg-core.js`,
-          wasmURL: `${CORE_BASE}/mt/ffmpeg-core.wasm`,
-          workerURL: `${CORE_BASE}/mt/ffmpeg-core.worker.js`,
-        });
-      } else {
-        await instance.load({
-          coreURL: `${CORE_BASE}/ffmpeg-core.js${v}`,
-          wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
-        });
-      }
-      dbg(`ffmpeg core loaded: ${mt ? "multi-thread (Turbo)" : "single-thread"}`);
+      await instance.load({
+        coreURL: `${CORE_BASE}/ffmpeg-core.js${v}`,
+        wasmURL: `${CORE_BASE}/ffmpeg-core.wasm${v}`,
+      });
+      dbg("ffmpeg core loaded: single-thread");
       ffmpeg = instance;
       return instance;
     } catch (e) {
@@ -217,24 +203,9 @@ export async function addMusicToVideo(
 
 export async function generateVideo(opts: GenerateOptions): Promise<GenerateOutput> {
   opts.onProgress({ stage: "loading", progress: 4, message: "Loading video engine (ffmpeg.wasm)…" });
-  const usedMt = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true && !mtDisabled;
-  const attempt = async (): Promise<GenerateOutput> => {
-    await resetFFmpeg(); // fresh heap per video — prevents cross-video OOM cascades
-    const ff = await getFFmpeg();
-    return opts.fast ? generateFast(ff, opts) : generateStandard(ff, opts);
-  };
-  try {
-    return await attempt();
-  } catch (e) {
-    // If the multi-threaded core failed/hung (Turbo), disable it and retry on the
-    // reliable single-thread core — for this video and the rest of the session.
-    if (usedMt && !mtDisabled) {
-      mtDisabled = true;
-      pushLog(`multi-thread core failed (${e instanceof Error ? e.message : String(e)}); retrying single-thread`);
-      return await attempt();
-    }
-    throw e;
-  }
+  await resetFFmpeg(); // fresh heap per video — prevents cross-video OOM cascades
+  const ff = await getFFmpeg();
+  return opts.fast ? generateFast(ff, opts) : generateStandard(ff, opts);
 }
 
 async function generateStandard(ff: FFmpeg, opts: GenerateOptions): Promise<GenerateOutput> {
