@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)"/>
+  <!-- film perforations -->
+  <g fill="#ffffff" opacity="0.85">
+    <rect x="9"  y="12" width="5" height="5" rx="1.2"/>
+    <rect x="9"  y="29.5" width="5" height="5" rx="1.2"/>
+    <rect x="9"  y="47" width="5" height="5" rx="1.2"/>
+    <rect x="50" y="12" width="5" height="5" rx="1.2"/>
+    <rect x="50" y="29.5" width="5" height="5" rx="1.2"/>
+    <rect x="50" y="47" width="5" height="5" rx="1.2"/>
+  </g>
+  <!-- play button -->
+  <circle cx="32" cy="32" r="15" fill="#ffffff"/>
+  <path d="M28 24.5 L42 32 L28 39.5 Z" fill="url(#g)"/>
+</svg>
