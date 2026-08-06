@@ -195,8 +195,11 @@ export async function hwEncodeVideo(opts: HwOptions): Promise<{ bytes: Uint8Arra
       error: (e) => reject(new Error("decode: " + e)),
     });
     decoder.configure({ codec: d.codec, codedWidth: d.width, codedHeight: d.height, description: d.description } as VideoDecoderConfig);
+    let settled = false;
+    const finish = () => { if (!settled) { settled = true; clearTimeout(guard); try { decoder.close(); } catch { /* */ } resolve(); } };
+    const guard = setTimeout(() => { dbg(`HW: clip stalled >45s — skipping`); finish(); }, 45000);
     for (let i = 0; i < feedTo; i++) decoder.decode(d.chunks[i]);
-    decoder.flush().then(() => pending).then(() => { try { decoder.close(); } catch { /* */ } resolve(); }).catch(reject);
+    decoder.flush().then(() => pending).then(finish).catch((e) => { if (!settled) { settled = true; clearTimeout(guard); reject(e); } });
   });
 
   for (let p = 0; p < plan.length && outIndex < totalFrames; p++) {

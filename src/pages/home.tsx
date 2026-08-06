@@ -381,16 +381,24 @@ export default function Home() {
       const jobStart = performance.now();
       addLog("info", `Starting job: ${job.label}`);
 
+      const MAX_TRY = 3;
       for (let i = 0; i < total; i++) {
-        try {
-          const r = await generateOne(s, i, total, flags, jamCache);
-          made++; setResults((prev) => [r, ...prev]);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
-          failures.push(`Video ${i + 1}: ${msg}`);
-          addLog("error", `Video ${i + 1}/${total} FAILED: ${msg}`);
-          const flog = getRecentFfmpegLog();
-          if (flog) addLog("error", `ffmpeg: ${flog.split("\\n").slice(-3).join(" | ")}`);
+        let ok = false;
+        for (let attempt = 1; attempt <= MAX_TRY && !ok; attempt++) {
+          try {
+            const r = await generateOne(s, i, total, flags, jamCache);
+            made++; setResults((prev) => [r, ...prev]); ok = true;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err);
+            if (attempt < MAX_TRY) {
+              addLog("warn", `Video ${i + 1}/${total} attempt ${attempt} failed (${msg}) — retrying with different footage…`);
+            } else {
+              failures.push(`Video ${i + 1}: ${msg}`);
+              addLog("error", `Video ${i + 1}/${total} FAILED after ${MAX_TRY} attempts: ${msg}`);
+              const flog = getRecentFfmpegLog();
+              if (flog) addLog("error", "ffmpeg: " + flog.split("\n").slice(-3).join(" | "));
+            }
+          }
         }
       }
 
