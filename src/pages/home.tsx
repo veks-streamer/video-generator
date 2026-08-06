@@ -240,8 +240,9 @@ export default function Home() {
     // Generated
     onProgress({ stage: "audio", progress: 3, message: "Composing background music…" });
     const seed = (Date.now() ^ (index * 2654435761) ^ Math.floor(Math.random() * 1e9)) >>> 0;
-    const { bytes, genreId } = await generateMusic(s.genGenre, seed, targetLen);
-    return { music: { parts: [bytes], loop: false, volume: vol }, label: genLabel(genreId) };
+    const musicLen = Math.min(targetLen, 60); // render a short loop; ffmpeg loops it to length
+    const { bytes, genreId } = await generateMusic(s.genGenre, seed, musicLen);
+    return { music: { parts: [bytes], loop: targetLen > musicLen + 0.1, volume: vol }, label: genLabel(genreId) };
   }
 
   async function generateOne(s: Snap, index: number, total: number, flags: RunFlags, jamCache: Map<string, any[]>): Promise<VideoResult> {
