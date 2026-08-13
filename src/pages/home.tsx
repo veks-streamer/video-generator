@@ -19,7 +19,8 @@ import {
   videoSources, VSOURCE_PIXABAY, videoStyles, styleVf, STYLE_NONE, themes, randomTheme, RANDOM_THEME_ID, formatElapsed,
   generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_JAMENDO, MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
-import type { ProgressUpdate, VideoResult, Theme, VideoClip } from "@/lib/constants";
+import type { ProgressUpdate, VideoResult, Theme, VideoClip, VideoCredits, CreditEntry } from "@/lib/constants";
+import { formatCredits } from "@/lib/constants";
 import {
   hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage,
   getJamendoKey, hasJamendoKey, getUsedTrackIds, addUsedTrackIds,
@@ -34,6 +35,8 @@ import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio } from "@/lib/jamendo";
 import { saveVideo, getAllVideos, clearVideos, estimateUsage, type StoredVideo } from "@/lib/idb";
 import SettingsPage from "@/pages/settings";
+import { makeThumbnail } from "@/lib/thumbnail";
+import { zipStore } from "@/lib/zip";
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 const shuffle = <T,>(a: T[]) => [...a].sort(() => Math.random() - 0.5);
@@ -61,7 +64,8 @@ function notify(title: string, body: string) {
 }
 function storedToResult(s: StoredVideo): VideoResult {
   return { id: s.id, url: URL.createObjectURL(s.blob), blob: s.blob, duration: s.duration,
-    themeLabel: s.themeLabel, aspectLabel: s.aspectLabel, musicLabel: s.musicLabel, createdAt: s.createdAt, elapsedMs: s.elapsedMs };
+    themeLabel: s.themeLabel, aspectLabel: s.aspectLabel, musicLabel: s.musicLabel, createdAt: s.createdAt, elapsedMs: s.elapsedMs,
+    credits: s.credits, thumbUrl: s.thumbnail ? URL.createObjectURL(s.thumbnail) : undefined };
 }
 
 interface Snap {
@@ -167,14 +171,15 @@ export default function Home() {
   async function resolveMusic(
     s: Snap, index: number, targetLen: number,
     onProgress: (p: ProgressUpdate) => void, flags: RunFlags, jamCache: Map<string, any[]>,
-  ): Promise<{ music: { parts: Uint8Array[]; loop: boolean; volume: number } | null; label: string }> {
+  ): Promise<{ music: { parts: Uint8Array[]; loop: boolean; volume: number } | null; label: string; musicSource: string | null; musicAuthors: CreditEntry[] }> {
     const vol = s.musicVolume;
-    if (s.musicSource === MUSIC_NONE) return { music: null, label: "No music" };
+    const none = (label: string) => ({ music: null, label, musicSource: null, musicAuthors: [] as CreditEntry[] });
+    if (s.musicSource === MUSIC_NONE) return none("No music");
 
     if (s.musicSource === MUSIC_UPLOAD) {
-      if (!s.musicFile) return { music: null, label: "No music" };
+      if (!s.musicFile) return none("No music");
       const bytes = new Uint8Array(await s.musicFile.arrayBuffer());
-      return { music: { parts: [bytes], loop: true, volume: vol }, label: s.musicFile.name };
+      return { music: { parts: [bytes], loop: true, volume: vol }, label: s.musicFile.name, musicSource: "Uploaded", musicAuthors: [] };
     }
 
     if (s.musicSource === MUSIC_JAMENDO) {
@@ -183,7 +188,7 @@ export default function Home() {
       if (!hasJamendoKey()) {
         flags.jamendoFellBack = true; flags.jamendoError = "No Jamendo Client ID set — add it in Settings.";
         addLog("warn", `Video ${index + 1}: Jamendo selected but no Client ID — no music.`);
-        return { music: null, label: "No music (Jamendo not configured)" };
+        return none("No music (Jamendo not configured)");
       }
       const all = jamendoGenres.filter((g) => g.id !== MUSIC_RANDOM).map((g) => g.id);
       const order = s.jamGenre === MUSIC_RANDOM
@@ -194,6 +199,7 @@ export default function Home() {
       let lastErr = "";
       const parts: Uint8Array[] = [];
       const names: string[] = [];
+      const jamCredits: CreditEntry[] = [];
       let sumDur = 0;
       onProgress({ stage: "audio", progress: 3, message: "Finding Jamendo tracks…" });
 
@@ -216,6 +222,7 @@ export default function Home() {
             try {
               const bytes = await downloadAudio(url);
               parts.push(bytes); names.push(`${t.name} — ${t.artist}`);
+              jamCredits.push({ title: t.name, author: t.artist, url: t.url });
               localUsed.add(t.id); addUsedTrackIds([t.id]);
               sumDur += Number(t.duration) || 0; ok = true;
               addLog("info", `Video ${index + 1}: Jamendo “${t.name}” — ${t.artist} [${genre}]${sumDur < targetLen ? ` (${Math.round(sumDur)}s / ${Math.round(targetLen)}s)` : ""}`);
@@ -230,11 +237,11 @@ export default function Home() {
         flags.jamendoFellBack = true;
         flags.jamendoError = lastErr || "No commercial-licensed tracks available in any genre.";
         addLog("warn", `Video ${index + 1}: Jamendo — ${flags.jamendoError} (no music)`);
-        return { music: null, label: "No music (Jamendo)" };
+        return none("No music (Jamendo)");
       }
       const label = names.length > 1 ? `${names[0]} (+${names.length - 1} more)` : names[0];
       // loop only if we still couldn't gather enough to cover the video
-      return { music: { parts, loop: sumDur < targetLen, volume: vol }, label };
+      return { music: { parts, loop: sumDur < targetLen, volume: vol }, label, musicSource: "Jamendo", musicAuthors: jamCredits };
     }
 
     // Generated
@@ -242,7 +249,7 @@ export default function Home() {
     const seed = (Date.now() ^ (index * 2654435761) ^ Math.floor(Math.random() * 1e9)) >>> 0;
     const musicLen = Math.min(targetLen, 60); // render a short loop; ffmpeg loops it to length
     const { bytes, genreId } = await generateMusic(s.genGenre, seed, musicLen);
-    return { music: { parts: [bytes], loop: targetLen > musicLen + 0.1, volume: vol }, label: genLabel(genreId) };
+    return { music: { parts: [bytes], loop: targetLen > musicLen + 0.1, volume: vol }, label: genLabel(genreId), musicSource: "Generated", musicAuthors: [] };
   }
 
   async function generateOne(s: Snap, index: number, total: number, flags: RunFlags, jamCache: Map<string, any[]>): Promise<VideoResult> {
@@ -314,7 +321,7 @@ export default function Home() {
       addLog("warn", `Video ${index + 1}/${total}: only ~${Math.round(uDur)}s unique footage for “${label}” — clips repeat (random seek adds variety). For more clips try 30fps or a broader keyword.`);
     }
 
-    const { music, label: musicLabel } = await resolveMusic(s, index, s.duration, onProgress, flags, jamCache);
+    const { music, label: musicLabel, musicSource, musicAuthors } = await resolveMusic(s, index, s.duration, onProgress, flags, jamCache);
     addLog("info", `Video ${index + 1}/${total}: music = ${musicLabel}`);
 
     let blob: Blob | null = null, outDur = 0, usedClips: VideoClip[] = [];
@@ -355,13 +362,35 @@ export default function Home() {
     addUsedClipIds(usedClips.map((c) => c.id));
     addLog("info", `Video ${index + 1}/${total}: done — ${Math.round(outDur)}s in ${formatElapsed(performance.now() - started)}`);
 
+    // Attribution: unique authors across the clips actually used in this video.
+    const seenAuthor = new Set<string>();
+    const videoAuthors: CreditEntry[] = [];
+    for (const c of usedClips) {
+      const title = c.title || `Clip #${c.id}`;
+      const author = c.videographer || "Unknown";
+      const key = `${title}|${author}`;
+      if (seenAuthor.has(key)) continue;
+      seenAuthor.add(key);
+      videoAuthors.push({ title, author, url: c.pageUrl });
+    }
+    const videoSource = usedClips[0]?.source || (pix ? "Pixabay" : "Pexels");
+    const credits: VideoCredits = { videoSource, videoAuthors, musicSource, musicAuthors };
+    addLog("info", `Video ${index + 1}/${total}: credits — ${videoAuthors.length} video author(s)${musicAuthors.length ? `, ${musicAuthors.length} music author(s)` : ""}`);
+
+    // Representative thumbnail (best-scoring frame), shares the video's id.
+    onProgress({ stage: "complete", progress: 98, message: "Creating thumbnail…" });
+    let thumbBlob: Blob | null = null;
+    try { thumbBlob = await makeThumbnail(blob, 640); }
+    catch (e) { addLog("warn", `Video ${index + 1}/${total}: thumbnail failed (${e instanceof Error ? e.message : String(e)})`); }
+
     const result: VideoResult = {
       id: `${Date.now()}-${index}-${Math.floor(Math.random() * 1e4)}`,
       url: URL.createObjectURL(blob), blob, duration: outDur,
       themeLabel: label, aspectLabel: `${usedW}×${usedH} · ${fps}fps${usedFast ? " · fast" : ""}`,
       musicLabel, createdAt: new Date().toISOString(), elapsedMs: performance.now() - started,
+      credits, thumbUrl: thumbBlob ? URL.createObjectURL(thumbBlob) : undefined,
     };
-    await saveVideo({ id: result.id, blob, duration: outDur, themeLabel: result.themeLabel, aspectLabel: result.aspectLabel, musicLabel: result.musicLabel, createdAt: result.createdAt, elapsedMs: result.elapsedMs }).catch(() => {});
+    await saveVideo({ id: result.id, blob, thumbnail: thumbBlob ?? undefined, credits, duration: outDur, themeLabel: result.themeLabel, aspectLabel: result.aspectLabel, musicLabel: result.musicLabel, createdAt: result.createdAt, elapsedMs: result.elapsedMs }).catch(() => {});
     return result;
   }
 
@@ -448,12 +477,53 @@ export default function Home() {
     syncQueue();
   }
 
-  function downloadResult(r: VideoResult) {
+  function baseName(r: VideoResult) {
+    return `video-${r.themeLabel.replace(/\s+/g, "-").toLowerCase()}-${r.id}`;
+  }
+  function triggerDownload(href: string, filename: string) {
     const a = document.createElement("a");
-    a.href = r.url; a.download = `video-${r.themeLabel.replace(/\s+/g, "-").toLowerCase()}-${r.id}.mp4`;
+    a.href = href; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
   }
+  function downloadResult(r: VideoResult) { triggerDownload(r.url, `${baseName(r)}.mp4`); }
+  function downloadThumb(r: VideoResult) { if (r.thumbUrl) triggerDownload(r.thumbUrl, `${baseName(r)}.jpg`); }
   async function downloadAll() { for (const r of results) { downloadResult(r); await new Promise((res) => setTimeout(res, 600)); } }
+
+  // Bundle every thumbnail into one .zip (each named to match its video's id).
+  async function downloadAllThumbs() {
+    const entries: { name: string; data: Uint8Array }[] = [];
+    for (const r of results) {
+      if (!r.thumbUrl) continue;
+      try {
+        const data = new Uint8Array(await (await fetch(r.thumbUrl)).arrayBuffer());
+        entries.push({ name: `${baseName(r)}.jpg`, data });
+      } catch { /* skip unreadable */ }
+    }
+    if (!entries.length) { toast({ title: "No thumbnails", description: "Nothing to download yet." }); return; }
+    const url = URL.createObjectURL(zipStore(entries));
+    triggerDownload(url, "thumbnails.zip");
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  async function copyCredits(r: VideoResult) {
+    if (!r.credits) return;
+    try {
+      await navigator.clipboard.writeText(formatCredits(r.credits));
+      toast({ title: "Credits copied", description: "Author list copied to clipboard." });
+    } catch {
+      toast({ title: "Copy blocked", description: "Clipboard unavailable — select the text manually." });
+    }
+  }
+
+  // One combined credits.txt for the whole gallery.
+  function downloadAllCredits() {
+    const blocks = results.filter((r) => r.credits)
+      .map((r) => `=== ${r.themeLabel} (${baseName(r)}) ===\n${formatCredits(r.credits!)}`);
+    if (!blocks.length) { toast({ title: "No credits", description: "Nothing to download yet." }); return; }
+    const url = URL.createObjectURL(new Blob([blocks.join("\n")], { type: "text/plain" }));
+    triggerDownload(url, "credits.txt");
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
   async function clearResults() {
     results.forEach((r) => URL.revokeObjectURL(r.url));
     setResults([]); await clearVideos().catch(() => {}); refreshUsage();
@@ -559,7 +629,17 @@ export default function Home() {
 
           <div className="space-y-4">
             <h2 className="text-xl font-semibold flex items-center gap-2"><Video className="h-5 w-5" /> Results</h2>
-            <ResultsGallery results={results} usage={usage} onDownload={downloadResult} onDownloadAll={downloadAll} onClear={clearResults} />
+            <ResultsGallery
+              results={results}
+              usage={usage}
+              onDownload={downloadResult}
+              onDownloadAll={downloadAll}
+              onDownloadThumb={downloadThumb}
+              onDownloadAllThumbs={downloadAllThumbs}
+              onCopyCredits={copyCredits}
+              onDownloadAllCredits={downloadAllCredits}
+              onClear={clearResults}
+            />
           </div>
         </div>
 

@@ -1,0 +1,50 @@
+# CI for the experimental v2 branch. Builds a PORTABLE bundle (relative base, so
+# it runs on any static host) and uploads it as a downloadable artifact.
+# It deliberately does NOT deploy to GitHub Pages, so the live /video-generator/
+# site (built from main) is never overwritten while v2 is being verified.
+name: Build v2 (artifact only, no Pages deploy)
+
+on:
+  push:
+    branches: [v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Compute build metadata
+        run: echo "VITE_BUILD_TIME=$(date -u +'%Y-%m-%d %H:%M UTC')" >> "$GITHUB_ENV"
+
+      - name: Build (portable, relative base)
+        run: npm run build
+        env:
+          VITE_BASE: ./
+          VITE_APP_VERSION: v2-${{ github.sha }}
+          VITE_RUN: ${{ github.run_number }}
+          VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
+
+      - name: Upload site bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-generator-v2-site
+          path: dist
+          retention-days: 30

@@ -5,9 +5,13 @@ const DB_NAME = "vg-store";
 const STORE = "videos";
 const VERSION = 1;
 
+import type { VideoCredits } from "./constants";
+
 export interface StoredVideo {
   id: string;
   blob: Blob;
+  thumbnail?: Blob;          // representative JPEG thumbnail
+  credits?: VideoCredits;    // clip + music attribution
   themeLabel: string;
   aspectLabel: string;
   musicLabel: string;

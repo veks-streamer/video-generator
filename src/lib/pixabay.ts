@@ -10,6 +10,8 @@ const BASE = "https://pixabay.com/api/videos/";
 interface PixVid { url: string; width: number; height: number }
 interface PixHit {
   id: number;
+  pageURL?: string;
+  tags?: string;
   duration: number;
   videos: Record<string, PixVid>;
   user: string;
@@ -60,6 +62,9 @@ export async function searchPixabay(
         url: v.url,
         thumbnail: "",
         videographer: h.user ?? "Pixabay",
+        title: (h.tags ? h.tags.split(",")[0].trim() : "") || `Pixabay clip #${h.id}`,
+        pageUrl: h.pageURL,
+        source: "Pixabay",
       });
     }
     if (clips.length >= Math.max(needed * 3, 40) && p >= 2) break;

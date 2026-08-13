@@ -231,6 +231,10 @@ export interface VideoClip {
   url: string;
   thumbnail: string;
   videographer: string;
+  title?: string;     // human-friendly clip name (derived from the source page)
+  pageUrl?: string;   // link to the clip's page on the source site
+  authorUrl?: string; // link to the author's profile
+  source?: string;    // "Pexels" | "Pixabay"
 }
 
 export interface VideoResult {
@@ -243,6 +247,53 @@ export interface VideoResult {
   musicLabel: string;
   createdAt: string;
   elapsedMs: number;
+  credits?: VideoCredits;
+  thumbUrl?: string; // object URL of the generated thumbnail image
+}
+
+// ---- Attribution / credits ----
+export interface CreditEntry {
+  title: string;   // clip or song name
+  author: string;  // videographer / artist
+  url?: string;    // link to the source page (optional)
+}
+
+export interface VideoCredits {
+  videoSource: string;        // "Pexels" | "Pixabay"
+  videoAuthors: CreditEntry[];
+  musicSource: string | null; // "Jamendo" | "Generated" | "Uploaded" | null
+  musicAuthors: CreditEntry[];
+}
+
+/**
+ * Render the credits as a plain-text attribution block, e.g.:
+ *   Videos provided by Pexels.
+ *   Authors:
+ *   Waves crashing / Pero Peric
+ *   ...
+ *   Music provided by Jamendo.
+ *   Authors:
+ *   Song name / Karlo Karlovic
+ */
+export function formatCredits(c: VideoCredits): string {
+  const lines: string[] = [];
+  lines.push(`Videos provided by ${c.videoSource}.`);
+  lines.push("Authors:");
+  if (c.videoAuthors.length === 0) lines.push("(none)");
+  for (const e of c.videoAuthors) lines.push(`${e.title} / ${e.author}`);
+  lines.push("");
+  if (c.musicSource === "Generated") {
+    lines.push("Music generated in-app — royalty-free, no attribution required.");
+  } else if (c.musicSource === "Uploaded") {
+    lines.push("Music: user-provided file.");
+  } else if (c.musicSource && c.musicAuthors.length) {
+    lines.push(`Music provided by ${c.musicSource}.`);
+    lines.push("Authors:");
+    for (const e of c.musicAuthors) lines.push(`${e.title} / ${e.author}`);
+  } else {
+    lines.push("No music.");
+  }
+  return lines.join("\n").replace(/\n+$/,"") + "\n";
 }
 
 /** Human-friendly elapsed time, e.g. "42s" or "3m 05s". */

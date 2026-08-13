@@ -12,12 +12,26 @@ interface PexelsVideoFile {
 }
 interface PexelsVideo {
   id: number;
+  url: string;               // https://www.pexels.com/video/<slug>-<id>/
   duration: number;
   width: number;
   height: number;
   image: string;
   video_files: PexelsVideoFile[];
-  user: { name: string };
+  user: { name: string; url?: string };
+}
+
+/** Derive a readable clip title from the Pexels page slug, e.g.
+ *  ".../video/waves-crashing-on-the-shore-1234/" -> "Waves crashing on the shore". */
+function titleFromUrl(url: string, id: number): string {
+  try {
+    const m = url.match(/\/video\/([^/]+)\/?$/);
+    if (m) {
+      const slug = m[1].replace(new RegExp(`-?${id}$`), "").replace(/-/g, " ").trim();
+      if (slug) return slug.charAt(0).toUpperCase() + slug.slice(1);
+    }
+  } catch { /* */ }
+  return `Pexels clip #${id}`;
 }
 interface PexelsSearchResponse { videos: PexelsVideo[] }
 
@@ -98,6 +112,10 @@ export async function searchVideos(
         url: f.url,
         thumbnail: v.image,
         videographer: v.user?.name ?? "Pexels",
+        title: titleFromUrl(v.url ?? "", v.id),
+        pageUrl: v.url,
+        authorUrl: v.user?.url,
+        source: "Pexels",
       });
     }
     if (clips.length >= Math.max(needed * 3, 40) && pnum >= 2) break;

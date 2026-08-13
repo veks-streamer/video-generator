@@ -1,15 +1,23 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, DownloadCloud, Trash2, Film, Clock, Music, Timer, MonitorPlay } from "lucide-react";
+import {
+  Download, DownloadCloud, Trash2, Film, Clock, Music, Timer, MonitorPlay,
+  Image as ImageIcon, Copy, FileText, Users, ChevronDown, ChevronUp,
+} from "lucide-react";
 import type { VideoResult } from "@/lib/constants";
-import { formatElapsed } from "@/lib/constants";
+import { formatElapsed, formatCredits } from "@/lib/constants";
 
 interface Props {
   results: VideoResult[];
   usage?: string;
   onDownload: (r: VideoResult) => void;
   onDownloadAll: () => void;
+  onDownloadThumb: (r: VideoResult) => void;
+  onDownloadAllThumbs: () => void;
+  onCopyCredits: (r: VideoResult) => void;
+  onDownloadAllCredits: () => void;
   onClear: () => void;
 }
 
@@ -19,7 +27,47 @@ function fmt(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onClear }: Props) {
+function CreditsPanel({ r, onCopy }: { r: VideoResult; onCopy: (r: VideoResult) => void }) {
+  const [open, setOpen] = useState(false);
+  if (!r.credits) return null;
+  const c = r.credits;
+  const count = c.videoAuthors.length + c.musicAuthors.length;
+  return (
+    <div className="rounded-md border bg-muted/30">
+      <div className="flex items-center justify-between px-2.5 py-1.5">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          title="Show / hide the author list"
+        >
+          <Users className="h-3.5 w-3.5" />
+          Credits · {count} author{count === 1 ? "" : "s"}
+          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2"
+          onClick={() => onCopy(r)}
+          title="Copy the full author list to the clipboard"
+        >
+          <Copy className="h-3.5 w-3.5 mr-1" /> Copy
+        </Button>
+      </div>
+      {open && (
+        <pre className="max-h-40 overflow-auto border-t px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
+{formatCredits(c)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+export function ResultsGallery({
+  results, usage, onDownload, onDownloadAll, onDownloadThumb,
+  onDownloadAllThumbs, onCopyCredits, onDownloadAllCredits, onClear,
+}: Props) {
   if (results.length === 0) {
     return (
       <Card className="aspect-video flex items-center justify-center bg-muted/30">
@@ -40,7 +88,7 @@ export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onCl
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-sm text-muted-foreground">
           {results.length} video{results.length > 1 ? "s" : ""}
           {" · "}
@@ -50,9 +98,15 @@ export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onCl
           </span>
           {usage ? <span className="ml-1">· {usage} stored</span> : null}
         </span>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button size="sm" onClick={onDownloadAll}>
             <DownloadCloud className="h-4 w-4 mr-2" /> Download all
+          </Button>
+          <Button size="sm" variant="outline" onClick={onDownloadAllThumbs} title="Download every thumbnail as one .zip">
+            <ImageIcon className="h-4 w-4 mr-2" /> Thumbnails (zip)
+          </Button>
+          <Button size="sm" variant="outline" onClick={onDownloadAllCredits} title="Download all author lists as one .txt">
+            <FileText className="h-4 w-4 mr-2" /> Credits (txt)
           </Button>
           <Button size="sm" variant="outline" onClick={onClear} title="Delete all saved videos from this browser to free space">
             <Trash2 className="h-4 w-4 mr-2" /> Clear cache
@@ -69,7 +123,13 @@ export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onCl
         {results.map((r) => (
           <Card key={r.id} className="overflow-hidden">
             <div className="bg-black">
-              <video src={r.url} controls loop className="w-full aspect-video object-contain" />
+              <video
+                src={r.url}
+                poster={r.thumbUrl}
+                controls
+                loop
+                className="w-full aspect-video object-contain"
+              />
             </div>
             <CardContent className="p-3 space-y-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -89,9 +149,32 @@ export function ResultsGallery({ results, usage, onDownload, onDownloadAll, onCl
                   <Timer className="h-3 w-3" /> {formatElapsed(r.elapsedMs)} to make
                 </Badge>
               </div>
-              <Button size="sm" className="w-full" onClick={() => onDownload(r)}>
-                <Download className="h-4 w-4 mr-2" /> Download
-              </Button>
+
+              <CreditsPanel r={r} onCopy={onCopyCredits} />
+
+              <div className="flex gap-2">
+                <Button size="sm" className="flex-1" onClick={() => onDownload(r)}>
+                  <Download className="h-4 w-4 mr-2" /> Download
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onDownloadThumb(r)}
+                  disabled={!r.thumbUrl}
+                  title="Download this video's thumbnail (same file name / id)"
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" /> Thumbnail
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onCopyCredits(r)}
+                  disabled={!r.credits}
+                  title="Copy the author list"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}

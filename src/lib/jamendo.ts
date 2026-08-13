@@ -9,6 +9,7 @@ export interface JamendoTrack {
   duration: number;
   audio: string;         // streamable mp3 url
   audiodownload?: string; // alternative download url (try if audio is CORS-blocked)
+  url?: string;           // Jamendo track page (for attribution)
 }
 
 const BASE = "https://api.jamendo.com/v3.0/tracks";
@@ -53,6 +54,7 @@ export async function searchJamendo(
       duration: Number(t.duration) || 0,
       audio: t.audio as string,
       audiodownload: t.audiodownload as string | undefined,
+      url: (t.shareurl ?? t.shorturl) as string | undefined,
     }));
 }
 
