@@ -296,6 +296,15 @@ export function formatCredits(c: VideoCredits): string {
   return lines.join("\n").replace(/\n+$/,"") + "\n";
 }
 
+/**
+ * Canonical asset id / filename stem for a generated video. The video, its
+ * thumbnail and its XML all share this exact stem, and it is used verbatim as
+ * the assetID inside the XML. e.g. "video-nature-1786630128589-0-9208".
+ */
+export function assetId(r: Pick<VideoResult, "themeLabel" | "id">): string {
+  return `video-${r.themeLabel.replace(/\s+/g, "-").toLowerCase()}-${r.id}`;
+}
+
 /** Human-friendly elapsed time, e.g. "42s" or "3m 05s". */
 export function formatElapsed(ms: number): string {
   const s = Math.round(ms / 1000);

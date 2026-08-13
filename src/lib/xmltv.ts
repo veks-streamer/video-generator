@@ -1,5 +1,5 @@
 import type { VideoResult } from "./constants";
-import { formatCredits } from "./constants";
+import { formatCredits, assetId } from "./constants";
 
 const PLACEHOLDER_IMAGE =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Philips_PM5544.svg/1280px-Philips_PM5544.svg.png";
@@ -19,7 +19,7 @@ function esc(s: string): string {
  * carries the extracted list of video + music authors.
  */
 export function buildVodXml(r: VideoResult): string {
-  const assetID = esc(r.id);
+  const assetID = esc(assetId(r));
   const year = (() => {
     const y = new Date(r.createdAt).getFullYear();
     return Number.isFinite(y) ? y : 2026;

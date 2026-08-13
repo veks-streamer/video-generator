@@ -20,7 +20,7 @@ import {
   generativeGenres, jamendoGenres, MUSIC_NONE, MUSIC_JAMENDO, MUSIC_UPLOAD, MUSIC_RANDOM,
 } from "@/lib/constants";
 import type { ProgressUpdate, VideoResult, Theme, VideoClip, VideoCredits, CreditEntry } from "@/lib/constants";
-import { formatCredits } from "@/lib/constants";
+import { formatCredits, assetId } from "@/lib/constants";
 import {
   hasPexelsKey, getPexelsKey, getUsedClipIds, addUsedClipIds, nextQueryPage,
   getJamendoKey, hasJamendoKey, getUsedTrackIds, addUsedTrackIds,
@@ -479,7 +479,7 @@ export default function Home() {
   }
 
   function baseName(r: VideoResult) {
-    return `video-${r.themeLabel.replace(/\s+/g, "-").toLowerCase()}-${r.id}`;
+    return assetId(r);
   }
   function triggerDownload(href: string, filename: string) {
     const a = document.createElement("a");
@@ -519,14 +519,14 @@ export default function Home() {
   // Per-video XMLTV export, named "<assetID>.xml" (assetID = the video's id).
   function downloadXml(r: VideoResult) {
     const url = URL.createObjectURL(new Blob([buildVodXml(r)], { type: "application/xml" }));
-    triggerDownload(url, `${r.id}.xml`);
+    triggerDownload(url, `${baseName(r)}.xml`);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
   // Every video's XML bundled into one .zip (each file named <assetID>.xml).
   function downloadAllXml() {
     const enc = new TextEncoder();
-    const entries = results.map((r) => ({ name: `${r.id}.xml`, data: enc.encode(buildVodXml(r)) }));
+    const entries = results.map((r) => ({ name: `${baseName(r)}.xml`, data: enc.encode(buildVodXml(r)) }));
     if (!entries.length) { toast({ title: "No XML", description: "Nothing to export yet." }); return; }
     const url = URL.createObjectURL(zipStore(entries));
     triggerDownload(url, "xml.zip");
