@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Download, DownloadCloud, Trash2, Film, Clock, Music, Timer, MonitorPlay,
-  Image as ImageIcon, Copy, FileText, Users, ChevronDown, ChevronUp, Camera,
+  Image as ImageIcon, Copy, FileText, Users, ChevronDown, ChevronUp, Camera, FileCode,
 } from "lucide-react";
 import type { VideoResult } from "@/lib/constants";
 import { formatElapsed, formatCredits } from "@/lib/constants";
@@ -19,6 +19,8 @@ interface Props {
   onDownloadAllThumbs: () => void;
   onCopyCredits: (r: VideoResult) => void;
   onDownloadAllCredits: () => void;
+  onDownloadXml: (r: VideoResult) => void;
+  onDownloadAllXml: () => void;
   onCaptureThumb: (r: VideoResult, blob: Blob) => void | Promise<void>;
   onClear: () => void;
 }
@@ -36,7 +38,7 @@ function CreditsPanel({ r, onCopy }: { r: VideoResult; onCopy: (r: VideoResult) 
   const count = c.videoAuthors.length + c.musicAuthors.length;
   return (
     <div className="rounded-md border bg-muted/30">
-      <div className="flex items-center justify-between px-2.5 py-1.5">
+      <div className="flex items-center justify-between px-3 py-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -52,7 +54,7 @@ function CreditsPanel({ r, onCopy }: { r: VideoResult; onCopy: (r: VideoResult) 
         </Button>
       </div>
       {open && (
-        <pre className="max-h-40 overflow-auto border-t px-2.5 py-2 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
+        <pre className="max-h-40 overflow-auto border-t px-3 py-2.5 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-muted-foreground">
 {formatCredits(c)}
         </pre>
       )}
@@ -61,12 +63,13 @@ function CreditsPanel({ r, onCopy }: { r: VideoResult; onCopy: (r: VideoResult) 
 }
 
 function VideoCard({
-  r, onDownload, onDownloadThumb, onCopyCredits, onCaptureThumb,
+  r, onDownload, onDownloadThumb, onCopyCredits, onDownloadXml, onCaptureThumb,
 }: {
   r: VideoResult;
   onDownload: (r: VideoResult) => void;
   onDownloadThumb: (r: VideoResult) => void;
   onCopyCredits: (r: VideoResult) => void;
+  onDownloadXml: (r: VideoResult) => void;
   onCaptureThumb: (r: VideoResult, blob: Blob) => void | Promise<void>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -92,16 +95,9 @@ function VideoCard({
   return (
     <Card className="overflow-hidden">
       <div className="bg-black">
-        <video
-          ref={videoRef}
-          src={r.url}
-          poster={r.thumbUrl}
-          controls
-          loop
-          className="w-full aspect-video object-contain"
-        />
+        <video ref={videoRef} src={r.url} poster={r.thumbUrl} controls loop className="w-full aspect-video object-contain" />
       </div>
-      <CardContent className="p-3 space-y-2.5">
+      <CardContent className="p-4 space-y-3.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary" className="flex items-center gap-1 text-[11px]"><Film className="h-3 w-3" /> {r.themeLabel}</Badge>
           <Badge variant="secondary" className="flex items-center gap-1 text-[11px]"><MonitorPlay className="h-3 w-3" /> {r.aspectLabel}</Badge>
@@ -111,32 +107,30 @@ function VideoCard({
         </div>
 
         {/* Thumbnail preview + capture controls */}
-        <div className="flex gap-3">
-          <div className="w-32 shrink-0">
-            <p className="text-[11px] font-medium text-muted-foreground mb-1">Thumbnail</p>
+        <div className="space-y-2.5">
+          <div className="flex items-start gap-3">
             {r.thumbUrl ? (
-              <img
-                src={r.thumbUrl}
-                alt="Video thumbnail"
-                className="w-full aspect-video object-cover rounded border bg-muted"
-              />
+              <img src={r.thumbUrl} alt="Video thumbnail" className="w-28 shrink-0 aspect-video object-cover rounded-md border bg-muted" />
             ) : (
-              <div className="w-full aspect-video rounded border bg-muted flex items-center justify-center text-muted-foreground">
+              <div className="w-28 shrink-0 aspect-video rounded-md border bg-muted flex items-center justify-center text-muted-foreground">
                 <ImageIcon className="h-5 w-5" />
               </div>
             )}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium">Thumbnail</p>
+              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                This is what gets saved. Scrub the player to a moment you like, then capture a full-resolution frame to replace it.
+              </p>
+              {hint && <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-snug mt-1">{hint}</p>}
+            </div>
           </div>
-          <div className="flex-1 flex flex-col justify-center gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             <Button size="sm" variant="secondary" onClick={capture} disabled={busy} title="Grab the frame currently shown in the player and use it as the thumbnail">
-              <Camera className="h-4 w-4 mr-2" /> {busy ? "Capturing…" : "Use current player frame"}
+              <Camera className="h-4 w-4 mr-2 shrink-0" /> {busy ? "Capturing…" : "Capture frame"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => onDownloadThumb(r)} disabled={!r.thumbUrl} title="Download this thumbnail (full resolution, same file id as the video)">
-              <ImageIcon className="h-4 w-4 mr-2" /> Download thumbnail
+              <ImageIcon className="h-4 w-4 mr-2 shrink-0" /> Save image
             </Button>
-            <p className="text-[11px] text-muted-foreground leading-tight">
-              Scrub the player to a moment you like, then capture a full-resolution image.
-            </p>
-            {hint && <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-tight">{hint}</p>}
           </div>
         </div>
 
@@ -144,7 +138,10 @@ function VideoCard({
 
         <div className="flex gap-2">
           <Button size="sm" className="flex-1" onClick={() => onDownload(r)}>
-            <Download className="h-4 w-4 mr-2" /> Download
+            <Download className="h-4 w-4 mr-2" /> Download video
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onDownloadXml(r)} title="Download this video's XML (named <id>.xml)">
+            <FileCode className="h-4 w-4 mr-1.5" /> XML
           </Button>
           <Button size="sm" variant="outline" onClick={() => onCopyCredits(r)} disabled={!r.credits} title="Copy the author list">
             <Copy className="h-4 w-4" />
@@ -156,8 +153,8 @@ function VideoCard({
 }
 
 export function ResultsGallery({
-  results, usage, onDownload, onDownloadAll, onDownloadThumb,
-  onDownloadAllThumbs, onCopyCredits, onDownloadAllCredits, onCaptureThumb, onClear,
+  results, usage, onDownload, onDownloadAll, onDownloadThumb, onDownloadAllThumbs,
+  onCopyCredits, onDownloadAllCredits, onDownloadXml, onDownloadAllXml, onCaptureThumb, onClear,
 }: Props) {
   if (results.length === 0) {
     return (
@@ -177,7 +174,7 @@ export function ResultsGallery({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <span className="text-sm text-muted-foreground">
           {results.length} video{results.length > 1 ? "s" : ""}
           {" · "}
@@ -190,17 +187,18 @@ export function ResultsGallery({
         <div className="flex gap-2 flex-wrap">
           <Button size="sm" onClick={onDownloadAll}><DownloadCloud className="h-4 w-4 mr-2" /> Download all</Button>
           <Button size="sm" variant="outline" onClick={onDownloadAllThumbs} title="Download every thumbnail as one .zip"><ImageIcon className="h-4 w-4 mr-2" /> Thumbnails (zip)</Button>
+          <Button size="sm" variant="outline" onClick={onDownloadAllXml} title="Download every video's XML as one .zip"><FileCode className="h-4 w-4 mr-2" /> XML (zip)</Button>
           <Button size="sm" variant="outline" onClick={onDownloadAllCredits} title="Download all author lists as one .txt"><FileText className="h-4 w-4 mr-2" /> Credits (txt)</Button>
           <Button size="sm" variant="outline" onClick={onClear} title="Delete all saved videos from this browser to free space"><Trash2 className="h-4 w-4 mr-2" /> Clear cache</Button>
         </div>
       </div>
-      <p className="text-xs text-muted-foreground -mt-2">
+      <p className="text-xs text-muted-foreground">
         <Timer className="h-3 w-3 inline mr-1" />
         Times show how long each video took to <strong>generate</strong> — not the video's length.
         Videos are saved in this browser and stay here across visits until you press <strong>Clear cache</strong>.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-5">
         {results.map((r) => (
           <VideoCard
             key={r.id}
@@ -208,6 +206,7 @@ export function ResultsGallery({
             onDownload={onDownload}
             onDownloadThumb={onDownloadThumb}
             onCopyCredits={onCopyCredits}
+            onDownloadXml={onDownloadXml}
             onCaptureThumb={onCaptureThumb}
           />
         ))}

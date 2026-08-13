@@ -37,6 +37,7 @@ import { saveVideo, getAllVideos, clearVideos, estimateUsage, updateThumbnail, t
 import SettingsPage from "@/pages/settings";
 import { makeThumbnail } from "@/lib/thumbnail";
 import { zipStore } from "@/lib/zip";
+import { buildVodXml } from "@/lib/xmltv";
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 const shuffle = <T,>(a: T[]) => [...a].sort(() => Math.random() - 0.5);
@@ -515,6 +516,23 @@ export default function Home() {
     }
   }
 
+  // Per-video XMLTV export, named "<assetID>.xml" (assetID = the video's id).
+  function downloadXml(r: VideoResult) {
+    const url = URL.createObjectURL(new Blob([buildVodXml(r)], { type: "application/xml" }));
+    triggerDownload(url, `${r.id}.xml`);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // Every video's XML bundled into one .zip (each file named <assetID>.xml).
+  function downloadAllXml() {
+    const enc = new TextEncoder();
+    const entries = results.map((r) => ({ name: `${r.id}.xml`, data: enc.encode(buildVodXml(r)) }));
+    if (!entries.length) { toast({ title: "No XML", description: "Nothing to export yet." }); return; }
+    const url = URL.createObjectURL(zipStore(entries));
+    triggerDownload(url, "xml.zip");
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
   // Replace a video's thumbnail with a frame the user grabbed from the player.
   async function applyCapturedThumb(r: VideoResult, blob: Blob) {
     const newUrl = URL.createObjectURL(blob);
@@ -653,6 +671,8 @@ export default function Home() {
               onDownloadAllThumbs={downloadAllThumbs}
               onCopyCredits={copyCredits}
               onDownloadAllCredits={downloadAllCredits}
+              onDownloadXml={downloadXml}
+              onDownloadAllXml={downloadAllXml}
               onCaptureThumb={applyCapturedThumb}
               onClear={clearResults}
             />
