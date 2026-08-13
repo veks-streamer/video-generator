@@ -77,7 +77,7 @@ function scoreFrame(data: ImageData, w: number, h: number): number {
  * Generate a JPEG thumbnail Blob from a video blob. Returns null if the frame
  * can't be read (e.g. a tainted canvas — shouldn't happen for same-origin blobs).
  */
-export async function makeThumbnail(videoBlob: Blob, maxW = 640): Promise<Blob | null> {
+export async function makeThumbnail(videoBlob: Blob, maxW = 0): Promise<Blob | null> {
   const url = URL.createObjectURL(videoBlob);
   const video = document.createElement("video");
   video.muted = true;
@@ -111,17 +111,33 @@ export async function makeThumbnail(videoBlob: Blob, maxW = 640): Promise<Blob |
     }
 
     try { await seek(video, best.t); } catch { /* keep current frame */ }
-    const ow = Math.min(maxW, vw);
+    // Render at the video's NATIVE resolution by default (maxW = 0), high quality.
+    const ow = maxW > 0 ? Math.min(maxW, vw) : vw;
     const oh = Math.max(1, Math.round((ow * vh) / vw));
     const oc = document.createElement("canvas"); oc.width = ow; oc.height = oh;
     const octx = oc.getContext("2d");
     if (!octx) return null;
     octx.drawImage(video, 0, 0, ow, oh);
-    return await new Promise<Blob | null>((res) => oc.toBlob(res, "image/jpeg", 0.85));
+    return await new Promise<Blob | null>((res) => oc.toBlob(res, "image/jpeg", 0.9));
   } finally {
     video.pause?.();
     video.removeAttribute("src");
     try { video.load(); } catch { /* */ }
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * Grab the frame currently shown in a <video> element (at its current playback
+ * position) at the video's native resolution, as a high-quality JPEG. Returns
+ * null if no decoded frame is available yet (play or seek the video first).
+ */
+export function captureFrame(video: HTMLVideoElement, quality = 0.92): Promise<Blob | null> {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh || video.readyState < 2) return Promise.resolve(null);
+  const c = document.createElement("canvas"); c.width = vw; c.height = vh;
+  const ctx = c.getContext("2d");
+  if (!ctx) return Promise.resolve(null);
+  try { ctx.drawImage(video, 0, 0, vw, vh); } catch { return Promise.resolve(null); }
+  return new Promise((res) => c.toBlob(res, "image/jpeg", quality));
 }

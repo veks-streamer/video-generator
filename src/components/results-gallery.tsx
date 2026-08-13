@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Download, DownloadCloud, Trash2, Film, Clock, Music, Timer, MonitorPlay,
-  Image as ImageIcon, Copy, FileText, Users, ChevronDown, ChevronUp,
+  Image as ImageIcon, Copy, FileText, Users, ChevronDown, ChevronUp, Camera,
 } from "lucide-react";
 import type { VideoResult } from "@/lib/constants";
 import { formatElapsed, formatCredits } from "@/lib/constants";
+import { captureFrame } from "@/lib/thumbnail";
 
 interface Props {
   results: VideoResult[];
@@ -18,6 +19,7 @@ interface Props {
   onDownloadAllThumbs: () => void;
   onCopyCredits: (r: VideoResult) => void;
   onDownloadAllCredits: () => void;
+  onCaptureThumb: (r: VideoResult, blob: Blob) => void | Promise<void>;
   onClear: () => void;
 }
 
@@ -45,13 +47,7 @@ function CreditsPanel({ r, onCopy }: { r: VideoResult; onCopy: (r: VideoResult) 
           Credits · {count} author{count === 1 ? "" : "s"}
           {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2"
-          onClick={() => onCopy(r)}
-          title="Copy the full author list to the clipboard"
-        >
+        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onCopy(r)} title="Copy the full author list to the clipboard">
           <Copy className="h-3.5 w-3.5 mr-1" /> Copy
         </Button>
       </div>
@@ -64,17 +60,110 @@ function CreditsPanel({ r, onCopy }: { r: VideoResult; onCopy: (r: VideoResult) 
   );
 }
 
+function VideoCard({
+  r, onDownload, onDownloadThumb, onCopyCredits, onCaptureThumb,
+}: {
+  r: VideoResult;
+  onDownload: (r: VideoResult) => void;
+  onDownloadThumb: (r: VideoResult) => void;
+  onCopyCredits: (r: VideoResult) => void;
+  onCaptureThumb: (r: VideoResult, blob: Blob) => void | Promise<void>;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState("");
+
+  async function capture() {
+    const v = videoRef.current;
+    if (!v) return;
+    setHint("");
+    setBusy(true);
+    try {
+      const blob = await captureFrame(v);
+      if (!blob) { setHint("Play or move the player to a frame first, then capture."); return; }
+      await onCaptureThumb(r, blob);
+    } catch {
+      setHint("Couldn't capture this frame — try a different position.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="bg-black">
+        <video
+          ref={videoRef}
+          src={r.url}
+          poster={r.thumbUrl}
+          controls
+          loop
+          className="w-full aspect-video object-contain"
+        />
+      </div>
+      <CardContent className="p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="secondary" className="flex items-center gap-1 text-[11px]"><Film className="h-3 w-3" /> {r.themeLabel}</Badge>
+          <Badge variant="secondary" className="flex items-center gap-1 text-[11px]"><MonitorPlay className="h-3 w-3" /> {r.aspectLabel}</Badge>
+          <Badge variant="secondary" className="flex items-center gap-1 text-[11px]"><Clock className="h-3 w-3" /> {fmt(r.duration)}</Badge>
+          <Badge variant="secondary" className="flex items-center gap-1 text-[11px]"><Music className="h-3 w-3" /> {r.musicLabel}</Badge>
+          <Badge variant="secondary" className="flex items-center gap-1 text-[11px]" title="Time it took to generate this video"><Timer className="h-3 w-3" /> {formatElapsed(r.elapsedMs)} to make</Badge>
+        </div>
+
+        {/* Thumbnail preview + capture controls */}
+        <div className="flex gap-3">
+          <div className="w-32 shrink-0">
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">Thumbnail</p>
+            {r.thumbUrl ? (
+              <img
+                src={r.thumbUrl}
+                alt="Video thumbnail"
+                className="w-full aspect-video object-cover rounded border bg-muted"
+              />
+            ) : (
+              <div className="w-full aspect-video rounded border bg-muted flex items-center justify-center text-muted-foreground">
+                <ImageIcon className="h-5 w-5" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 flex flex-col justify-center gap-1.5">
+            <Button size="sm" variant="secondary" onClick={capture} disabled={busy} title="Grab the frame currently shown in the player and use it as the thumbnail">
+              <Camera className="h-4 w-4 mr-2" /> {busy ? "Capturing…" : "Use current player frame"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => onDownloadThumb(r)} disabled={!r.thumbUrl} title="Download this thumbnail (full resolution, same file id as the video)">
+              <ImageIcon className="h-4 w-4 mr-2" /> Download thumbnail
+            </Button>
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              Scrub the player to a moment you like, then capture a full-resolution image.
+            </p>
+            {hint && <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-tight">{hint}</p>}
+          </div>
+        </div>
+
+        <CreditsPanel r={r} onCopy={onCopyCredits} />
+
+        <div className="flex gap-2">
+          <Button size="sm" className="flex-1" onClick={() => onDownload(r)}>
+            <Download className="h-4 w-4 mr-2" /> Download
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onCopyCredits(r)} disabled={!r.credits} title="Copy the author list">
+            <Copy className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ResultsGallery({
   results, usage, onDownload, onDownloadAll, onDownloadThumb,
-  onDownloadAllThumbs, onCopyCredits, onDownloadAllCredits, onClear,
+  onDownloadAllThumbs, onCopyCredits, onDownloadAllCredits, onCaptureThumb, onClear,
 }: Props) {
   if (results.length === 0) {
     return (
       <Card className="aspect-video flex items-center justify-center bg-muted/30">
         <CardContent className="flex flex-col items-center gap-4 text-center p-8">
-          <div className="p-6 rounded-full bg-muted/50">
-            <Film className="h-12 w-12 text-muted-foreground" />
-          </div>
+          <div className="p-6 rounded-full bg-muted/50"><Film className="h-12 w-12 text-muted-foreground" /></div>
           <div className="space-y-2">
             <h3 className="text-lg font-medium">No videos yet</h3>
             <p className="text-sm text-muted-foreground max-w-xs">
@@ -99,18 +188,10 @@ export function ResultsGallery({
           {usage ? <span className="ml-1">· {usage} stored</span> : null}
         </span>
         <div className="flex gap-2 flex-wrap">
-          <Button size="sm" onClick={onDownloadAll}>
-            <DownloadCloud className="h-4 w-4 mr-2" /> Download all
-          </Button>
-          <Button size="sm" variant="outline" onClick={onDownloadAllThumbs} title="Download every thumbnail as one .zip">
-            <ImageIcon className="h-4 w-4 mr-2" /> Thumbnails (zip)
-          </Button>
-          <Button size="sm" variant="outline" onClick={onDownloadAllCredits} title="Download all author lists as one .txt">
-            <FileText className="h-4 w-4 mr-2" /> Credits (txt)
-          </Button>
-          <Button size="sm" variant="outline" onClick={onClear} title="Delete all saved videos from this browser to free space">
-            <Trash2 className="h-4 w-4 mr-2" /> Clear cache
-          </Button>
+          <Button size="sm" onClick={onDownloadAll}><DownloadCloud className="h-4 w-4 mr-2" /> Download all</Button>
+          <Button size="sm" variant="outline" onClick={onDownloadAllThumbs} title="Download every thumbnail as one .zip"><ImageIcon className="h-4 w-4 mr-2" /> Thumbnails (zip)</Button>
+          <Button size="sm" variant="outline" onClick={onDownloadAllCredits} title="Download all author lists as one .txt"><FileText className="h-4 w-4 mr-2" /> Credits (txt)</Button>
+          <Button size="sm" variant="outline" onClick={onClear} title="Delete all saved videos from this browser to free space"><Trash2 className="h-4 w-4 mr-2" /> Clear cache</Button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground -mt-2">
@@ -121,62 +202,14 @@ export function ResultsGallery({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {results.map((r) => (
-          <Card key={r.id} className="overflow-hidden">
-            <div className="bg-black">
-              <video
-                src={r.url}
-                poster={r.thumbUrl}
-                controls
-                loop
-                className="w-full aspect-video object-contain"
-              />
-            </div>
-            <CardContent className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
-                  <Film className="h-3 w-3" /> {r.themeLabel}
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
-                  <MonitorPlay className="h-3 w-3" /> {r.aspectLabel}
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
-                  <Clock className="h-3 w-3" /> {fmt(r.duration)}
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]">
-                  <Music className="h-3 w-3" /> {r.musicLabel}
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1 text-[11px]" title="Time it took to generate this video">
-                  <Timer className="h-3 w-3" /> {formatElapsed(r.elapsedMs)} to make
-                </Badge>
-              </div>
-
-              <CreditsPanel r={r} onCopy={onCopyCredits} />
-
-              <div className="flex gap-2">
-                <Button size="sm" className="flex-1" onClick={() => onDownload(r)}>
-                  <Download className="h-4 w-4 mr-2" /> Download
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onDownloadThumb(r)}
-                  disabled={!r.thumbUrl}
-                  title="Download this video's thumbnail (same file name / id)"
-                >
-                  <ImageIcon className="h-4 w-4 mr-2" /> Thumbnail
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onCopyCredits(r)}
-                  disabled={!r.credits}
-                  title="Copy the author list"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <VideoCard
+            key={r.id}
+            r={r}
+            onDownload={onDownload}
+            onDownloadThumb={onDownloadThumb}
+            onCopyCredits={onCopyCredits}
+            onCaptureThumb={onCaptureThumb}
+          />
         ))}
       </div>
     </div>

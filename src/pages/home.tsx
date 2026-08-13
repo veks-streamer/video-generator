@@ -33,7 +33,7 @@ import { setDebugLogger } from "@/lib/debuglog";
 import { hwEncodeVideo, hwSupported } from "@/lib/hw-encode";
 import { generateMusic } from "@/lib/music";
 import { searchJamendo, downloadAudio } from "@/lib/jamendo";
-import { saveVideo, getAllVideos, clearVideos, estimateUsage, type StoredVideo } from "@/lib/idb";
+import { saveVideo, getAllVideos, clearVideos, estimateUsage, updateThumbnail, type StoredVideo } from "@/lib/idb";
 import SettingsPage from "@/pages/settings";
 import { makeThumbnail } from "@/lib/thumbnail";
 import { zipStore } from "@/lib/zip";
@@ -380,7 +380,7 @@ export default function Home() {
     // Representative thumbnail (best-scoring frame), shares the video's id.
     onProgress({ stage: "complete", progress: 98, message: "Creating thumbnail…" });
     let thumbBlob: Blob | null = null;
-    try { thumbBlob = await makeThumbnail(blob, 640); }
+    try { thumbBlob = await makeThumbnail(blob); }
     catch (e) { addLog("warn", `Video ${index + 1}/${total}: thumbnail failed (${e instanceof Error ? e.message : String(e)})`); }
 
     const result: VideoResult = {
@@ -515,6 +515,21 @@ export default function Home() {
     }
   }
 
+  // Replace a video's thumbnail with a frame the user grabbed from the player.
+  async function applyCapturedThumb(r: VideoResult, blob: Blob) {
+    const newUrl = URL.createObjectURL(blob);
+    const oldUrl = r.thumbUrl;
+    setResults((prev) => prev.map((x) => (x.id === r.id ? { ...x, thumbUrl: newUrl } : x)));
+    if (oldUrl) setTimeout(() => URL.revokeObjectURL(oldUrl), 1000);
+    try {
+      await updateThumbnail(r.id, blob);
+      toast({ title: "Thumbnail updated", description: "Saved the frame from the player as this video's thumbnail." });
+    } catch {
+      toast({ title: "Saved for now", description: "Thumbnail replaced, but couldn't be persisted to storage." });
+    }
+    refreshUsage();
+  }
+
   // One combined credits.txt for the whole gallery.
   function downloadAllCredits() {
     const blocks = results.filter((r) => r.credits)
@@ -638,6 +653,7 @@ export default function Home() {
               onDownloadAllThumbs={downloadAllThumbs}
               onCopyCredits={copyCredits}
               onDownloadAllCredits={downloadAllCredits}
+              onCaptureThumb={applyCapturedThumb}
               onClear={clearResults}
             />
           </div>

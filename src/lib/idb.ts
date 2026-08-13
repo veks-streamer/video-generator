@@ -68,6 +68,22 @@ export async function deleteVideo(id: string): Promise<void> {
   db.close();
 }
 
+export async function updateThumbnail(id: string, thumbnail: Blob): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const rec = getReq.result as StoredVideo | undefined;
+      if (rec) { rec.thumbnail = thumbnail; store.put(rec); }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
 export async function clearVideos(): Promise<void> {
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
