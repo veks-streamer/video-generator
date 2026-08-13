@@ -7,13 +7,58 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera, Cpu } from "lucide-react";
+import { ArrowLeft, Key, CheckCircle2, XCircle, ExternalLink, Loader2, Shield, Save, Radio, Camera, Cpu, Eye, EyeOff, Copy } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { hwSupported } from "@/lib/hw-encode";
 import { getPexelsKey, setPexelsKey, getJamendoKey, setJamendoKey, getPixabayKey, setPixabayKey } from "@/lib/storage";
 import { searchVideos } from "@/lib/pexels";
 import { searchPixabay } from "@/lib/pixabay";
 import { searchJamendo } from "@/lib/jamendo";
+
+function KeyField({
+  id, label, placeholder, value, onChange,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { toast } = useToast();
+  const [show, setShow] = useState(false);
+  async function copy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: "Copied", description: `${label} copied to the clipboard.` });
+    } catch {
+      toast({ title: "Copy blocked", description: "Clipboard unavailable — reveal and select the key manually." });
+    }
+  }
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          type={show ? "text" : "password"}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 font-mono"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <Button type="button" variant="outline" size="icon" onClick={() => setShow((v) => !v)} title={show ? "Hide key" : "Show key"} aria-label={show ? "Hide key" : "Show key"}>
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </Button>
+        <Button type="button" variant="outline" size="icon" onClick={copy} disabled={!value} title="Copy key" aria-label="Copy key">
+          <Copy className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function Settings({ onClose }: { onClose?: () => void } = {}) {
   const { toast } = useToast();
@@ -151,16 +196,7 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="pexels">API key</Label>
-              <Input
-                id="pexels"
-                type="password"
-                placeholder="Paste your Pexels API key"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-              />
-            </div>
+            <KeyField id="pexels" label="API key" placeholder="Paste your Pexels API key" value={key} onChange={setKey} />
             <div className="flex flex-wrap gap-2">
               <Button onClick={save}>
                 <Save className="h-4 w-4 mr-2" /> Save
@@ -197,10 +233,7 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="pixabay">API key</Label>
-              <Input id="pixabay" type="password" placeholder="Paste your Pixabay API key" value={pixKey} onChange={(e) => setPixKey(e.target.value)} />
-            </div>
+            <KeyField id="pixabay" label="API key" placeholder="Paste your Pixabay API key" value={pixKey} onChange={setPixKey} />
             <div className="flex flex-wrap gap-2">
               <Button onClick={savePix}><Save className="h-4 w-4 mr-2" /> Save</Button>
               <Button variant="outline" onClick={testPix} disabled={!pixKey.trim() || pixTesting}>
@@ -239,16 +272,7 @@ export default function Settings({ onClose }: { onClose?: () => void } = {}) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="jamendo">Client id</Label>
-              <Input
-                id="jamendo"
-                type="password"
-                placeholder="Paste your Jamendo client id"
-                value={jamKey}
-                onChange={(e) => setJamKey(e.target.value)}
-              />
-            </div>
+            <KeyField id="jamendo" label="Client id" placeholder="Paste your Jamendo client id" value={jamKey} onChange={setJamKey} />
             <div className="flex flex-wrap gap-2">
               <Button onClick={saveJam}><Save className="h-4 w-4 mr-2" /> Save</Button>
               <Button variant="outline" onClick={testJam} disabled={!jamKey.trim() || jamTesting}>

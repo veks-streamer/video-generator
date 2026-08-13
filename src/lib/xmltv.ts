@@ -1,6 +1,9 @@
 import type { VideoResult } from "./constants";
 import { formatCredits } from "./constants";
 
+const PLACEHOLDER_IMAGE =
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Philips_PM5544.svg/1280px-Philips_PM5544.svg.png";
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -43,6 +46,8 @@ export function buildVodXml(r: VideoResult): string {
         <description>
                 <description lang="hr">${assetID}</description>
         </description>
+        <image_landscape>${PLACEHOLDER_IMAGE}</image_landscape> <!--vanjski dostupan http/s url-->
+        <image_portrait>${PLACEHOLDER_IMAGE}</image_portrait> <!--vanjski dostupan http/s url-->
         <epizode_number></epizode_number>
         <geoblocked>true</geoblocked>
         <geoblocke_rule>EU</geoblocke_rule>
